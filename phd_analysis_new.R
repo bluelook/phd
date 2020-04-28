@@ -1,4 +1,5 @@
-#install.packages(c("ggplot2", "tidyverse", "gridExtra", "purrr"))
+#install.packages(c("ggplot2", "tidyverse", "gridExtra", "purrr","plotly"))
+
 #ggthemes, "extrafont", "cowplot", "grid", ggforce, shiny, ggridges, ggrepel, reshape2
 #devtools::install_github("thomasp85/patchwork")
 library(ggplot2)
@@ -6,19 +7,52 @@ library(tidyverse)
 library(purrr)
 library(gridExtra)
 library(gtools)
+library(plot3D)
+library(readxl)
 
-rm(list = ls()) #clear all
+
+rm(list = ls())
+dev.off() #clear all
 #set working directory to the data files location
-setwd('./outputs')
+setwd('./data/behavioral')
 # list the files in a directory, each file represents a subject
 file_names <- list.files(pattern = ".csv$")
+num_subjects <- length(file_names)
+subj_data <- read_xlsx("responses.xlsx", sheet="all traversed")
+
 #read all the files in the directory into one data frame
 full_df <- do.call(smartbind, lapply(file_names, read.csv, header=TRUE,stringsAsFactors=FALSE))
 #set working directory back to the source file location
-setwd('..')
+setwd('../..')
+model_subj_data <- read_csv("./output/optimizationResultAll.csv")#, check.names = FALSE)
+bic_stress <- read_csv("./output/BICStress.csv") #, check.names = FALSE)
+bic_meal <- read_csv("./output/BICMeal.csv")
+bic_room <- read_csv("./output/BICRoom.csv")
+
+bic_stress$subject_nr <- factor(bic_stress$subject_nr)
+bic_meal$subject_nr <- factor(bic_meal$subject_nr)
+bic_room$subject_nr <- factor(bic_room$subject_nr)
+
+ggplot(data = bic_stress,aes(x = reorder(subject_nr, -deltaBICInd2AB_Ind1AB), y = deltaBICInd2AB_Ind1AB,fill=subject_nr) )+
+  geom_bar(stat = "identity") +
+  labs(title = "stress delta BIC (ind 2ab vs 1 ab) per subject", x="subjects")
+
+ggplot(data = bic_meal,aes(x = reorder(subject_nr, -deltaBICInd2AB_Ind1AB), y = deltaBICInd2AB_Ind1AB,fill=subject_nr) )+
+  geom_bar(stat = "identity") +
+  labs(title = "meals delta BIC (ind 2ab vs 1 ab) per subject", x="subjects")
+
+ggplot(data = bic_room,aes(x = reorder(subject_nr, -deltaBICInd2AB_Ind1AB), y = deltaBICInd2AB_Ind1AB,fill=subject_nr) )+
+  geom_bar(stat = "identity") +
+  labs(title = "rooms delta BIC (ind 2ab vs 1 ab) per subject", x="subjects")
+#setwd('./questionaires')
+#qcae_df <- t(read.csv('qcae.csv', header = FALSE, stringsAsFactors=FALSE))
+#colnames(qcae_df) <- qcae_df[1, ]
+#rownames(qcae_df) <- c()
+#qcae_df = qcae_df[-1,]
 
 #keep only the needed data and add numeric data about choices(dist,sweet,wood = 1. reap, salty, blue = 0)
 extracted_df <-select(full_df,subject_nr,actor,correct,preferred)
+
 #for each row convert choices to numeric values
 for (i in 1:nrow(extracted_df)){
   #if the choice taken was incorrect
@@ -67,52 +101,187 @@ for (i in 1:nrow(extracted_df)){
   }
 }
 
+#descriptive statistics
+#summary(extracted_df)
+
 # actor_trials <- subject_choices %>% filter(actor == subject_choices$actor[1])
 # num_trials <- length(actor_trials$subject_nr)
 
 theme_set(theme_bw())
 
+#mean by actor between subjects with corrected mean for "0" coded actor
 mean_chosen_all <-
-  extracted_df %>% group_by(actor) %>% summarise(mean = mean(chosen_numeric),
-                                                 mean_percent = round(mean * 100,digits=2)) %>% mutate(color = if_else(grepl('1', actor), "Condition 1", "Condition 2"))
+  extracted_df %>% group_by(actor) %>%
+  summarise(mean = mean(chosen_numeric), sem = sd(chosen_numeric*100) / sqrt(num_subjects)) %>%
+  mutate(color = if_else(grepl('1', actor), "Condition 1", "Condition 2")) %>%
+  mutate(mean = if_else(color == "Condition 1", 1 - mean, mean),
+         mean_percent = round(mean * 100, digits = 2) )
 
+#plot the mean by actor
 ggplot(data = mean_chosen_all,
        aes(x = actor, y = mean_percent, fill = color)) +
   geom_bar(position = position_dodge(), stat = "identity") +
+  geom_errorbar(aes(ymin = mean_percent - sem, ymax = mean_percent + sem),
+                width = .2)+
   scale_x_discrete(name = "Strategies") +
-  scale_y_continuous(name = "Frequency of chosing strategy 2") +
-  labs(title = "Frequency of choosing strategy 2 - between subjects") +
+  scale_y_continuous(name = "Mean Frequency  ") +
+  labs(title = "Frequency of choosing preferred strategy - between subjects") +
   geom_text(aes(label =  paste(mean_percent, "%")), position = position_dodge(width = 1),
             vjust = -0.5, size = 2)+
   scale_fill_discrete(name="Preferred\nStrategy", labels=c("Strategy 1", "Strategy 2"))
+ggsave(path="output", filename="mean_all_strategy_freq.png", width = 5, height = 5)
 
-ggsave(path="plots", filename="mean_all_strategy2_freq.png", width = 5, height = 5)
+#mean by actor within subjects
+mean_chosen_by_subject_orig <-
+                      extracted_df %>% group_by(subject_nr, actor) %>%
+                      summarise(mean = mean(chosen_numeric)) %>% mutate(color = if_else(grepl('1', actor), "Condition 1", "Condition 2"))
+#change to the complementary percentage for the strategy that is coded as '0'
+mean_chosen_by_subject <- mean_chosen_by_subject_orig %>%
+                      mutate(mean = if_else(color == "Condition 1", 1 - mean, mean), mean_percent =mean*100)
+#mean of two actors per condition
+mean_by_condition <-
+  mean_chosen_by_subject %>% mutate(
+    actor = if_else(
+      grepl('m', actor),
+      "m",
+      if_else(grepl('s', actor), "s",
+              if_else(grepl('r',  actor), "r", "")))) %>% group_by(subject_nr,actor) %>% 
+      summarise(mean = mean(mean_percent)) %>% mutate(dist_from_chance = mean-50)
 
 subjects <- unique(extracted_df$subject_nr)
+par(mfrow=c(1,2))
+#layout(matrix(c(1,1), 1, 2))
+for (subj in subjects)
+{
+  subject_choices <- mean_by_condition %>% filter(subject_nr == subj)
+  s = subject_choices$mean[subject_choices$actor=='s'] #stress is x axis
+  m = subject_choices$mean[subject_choices$actor=='m'] #meals is y axis
+  r = subject_choices$mean[subject_choices$actor=='r'] #rooms is z axis
+  x <- c(s, 0, 0)
+  y <- c(0, m, 0)
+  z <- c(0, 0, r)
+  line_xy <- rbind(x,y)
+  line_yz <- rbind(y,z)
+  line_xz <- rbind(x,z)
+  scatter3D(c(0,0,0), c(0,0,0), c(0,0,0), type = "b", axis.scales = FALSE,bty = "u", col.grid = "lightblue",
+            xlim = c(0,100), ylim = c(0,100), zlim = c(0,100), 
+            xlab = "Stress",ylab ="Meals", zlab = "Rooms", col = "red", 
+            theta = 120, phi = 17, ticktype="detailed", nticks = 6, main=paste("Subject ", subj))
+  scatter3D(line_xy[,1], line_xy[,2], line_xy[,3], type = "b", axis.scales = FALSE, col = "red", 
+            colkey=FALSE,add=TRUE)
+  scatter3D(line_xz[,1], line_xz[,2], line_xz[,3], type = "b", col = "darkgreen", colkey=FALSE, add=TRUE)
+  scatter3D(line_yz[,1], line_yz[,2], line_yz[,3], type = "b", col = "blue", colkey=FALSE, add=TRUE)
+}
+
+#comparison of distance from 50
+#target <- c("s", "r")
+#mean_by_condition_s_r <- filter(mean_by_condition,actor %in% target)
+mean_by_cond_reshaped <-pivot_wider(mean_by_condition %>% select(dist_from_chance,subject_nr,actor), names_from="actor", values_from="dist_from_chance")
+subj_data_merged <- merge(mean_by_cond_reshaped,subj_data,by="subject_nr", all.x = TRUE)
+subj_data_merged <- merge(subj_data_merged,model_subj_data,by="subject_nr")
+#subj_data_merged <- merge(subj_data_merged,bic_data,by="subject_nr")
+subj_data_merged_filtered <- subj_data_merged[subj_data_merged$BIC_act_dep < 60 & subj_data_merged$BIC_act_ind < 60 & subj_data_merged$BIC_act_dep_2A < 60 & subj_data_merged$BIC_act_ind_2A < 60,]
+
+
+#t test to compare BICs, see if significant
+t_bic_act_dep_ind = t.test(subj_data_merged_filtered$BIC_act_dep, subj_data_merged_filtered$BIC_act_ind)
+t_bic_act_dep_no_act = t.test(subj_data_merged_filtered$BIC_act_dep, subj_data_merged_filtered$BIC_no_act)
+t_bic_act_ind_no_act = t.test(subj_data_merged_filtered$BIC_act_ind, subj_data_merged_filtered$BIC_no_act)
+
+#make the columns to be rows to benefit from pipes
+bic_data_gathered <- gather(subj_data_merged_filtered %>% select(BIC_act_dep, BIC_no_act, BIC_act_ind), key = 'model', value ='bic',factor_key=TRUE)
+
+
+# Model Comparison - calculate mean of bic and sem per each model
+mean_bic <-
+  bic_data_gathered %>% group_by(model) %>% summarise(mean = mean(bic), sem = sd(bic) / sqrt(num_subjects))
+my_comparisons <- list( c("BIC_act_dep", "BIC_no_act"), c("BIC_no_act", "BIC_act_ind"), c("BIC_act_dep", "BIC_act_ind") )
+compare_means(bic ~ model,  data = bic_data_gathered, method = "anova")
+
+ggplot(bic_data_gathered, aes(x = model, y = bic, fill = model)) +
+  geom_point(shape = 21, size = 10)+
+  #geom_errorbar(aes(ymin = bic - sem, ymax = bic + sem), width = 0.2) +
+  labs(title = paste("Models Comparison p dep vs ind =", format(t_bic_act_dep_ind$p.value, digits = 2), ", p dep vs no act = ", format(t_bic_act_dep_no_act$p.value, digits = 2))) + 
+  scale_x_discrete(name="Model")+
+  scale_y_continuous(name = "BIC")+
+  theme(legend.title = element_blank())+ stat_compare_means(comparisons = my_comparisons)+#  Add pairwise comparisons p-value
+  stat_compare_means(label.y = 85)
+
+######playing with stats#####
+t_result = t.test(subj_data_merged_filtered$sAlpha_no_act,subj_data_merged_filtered$sAlpha_act_ind)
+print(t_result)
+
+#simple linear regression,"YVAR ~ XVAR" where YVAR is the dependent, or predicted,XVAR is the independent, or predictor
+lm1 <- lm(sAlpha_act_ind~CE,data=subj_data_merged_filtered)
+summary(lm1)
+lm2 <- lm(s~sAlpha_act_ind,data=subj_data_merged_filtered)
+summary(lm2)
+lm3 <- lm(s~sAlpha_act_dep,data=subj_data_merged_filtered)
+summary(lm3)
+lm4 <- lm(s~sAlpha_no_act,data=subj_data_merged_filtered)
+summary(lm4)
+
+glm_s <- glm(s ~ sAlpha_act_ind,data=subj_data_merged_filtered,family = gaussian(link="identity"))
+summary(glm_s)
+
+ggplot(subj_data_merged_filtered,aes(y = s,x = sAlpha_act_dep) )+ 
+  geom_point()+
+  stat_smooth(method="glm", se=F, method.args = list(family=gaussian()))+
+  ylab('stress mean value dist from chance') +
+  xlab('stress learning rate')
+
+learning_rates <- select(subj_data_merged_filtered,subject_nr, sAlpha_act_ind, sAlpha_act_dep, sAlpha_no_act)
+learning_rates_longer <- pivot_longer(learning_rates, sAlpha_act_ind:sAlpha_no_act,names_to = "learning_rate", values_to = "value")
+learning_rates_mean <- learning_rates_longer %>% group_by(learning_rate) %>% summarise(mean = mean(value), sem=sd(value)/sqrt(12))
+                                                                
+ggplot(data = learning_rates_mean,
+         aes(x = learning_rate, y = mean, fill = learning_rate)) +
+    geom_bar(position = position_dodge(), stat = "identity") +
+    scale_x_discrete(name = "learning rate") +
+    scale_y_continuous(name = "mean")+
+  geom_errorbar(aes(ymin = mean - sem, ymax = mean + sem),
+                width = .2) 
+
+# Compute the analysis of variance
+res.aov <- aov(value~learning_rate, data = learning_rates_longer)
+# Summary of the analysis
+summary(res.aov)
+
+# Box plots
+# ++++++++++++++++++++
+# Plot weight by group and color by group
+library("ggpubr")
+ggboxplot(mean_by_condition, x = "actor", y = "mean", 
+          color = "actor", palette = c("#00AFBB", "#E7B800", "#FC4E07"),
+          order = c("s", "m", "r"),
+          ylab = "mean", xlab = "condition")
+##########################
+
 #for each subject, calculate frequencies of choices and plot them
 for (subj_num_local in subjects) {
-  subject_choices <-
+  subj_choices <-
     extracted_df %>% filter(subject_nr == subj_num_local)
   
   #calculate % of 1s (dist, sweet, wood choices)
-  mean_chosen_individual <- subject_choices %>% group_by(subject_nr,actor) %>%
+  mean_chosen_individual <- subj_choices %>% group_by(subject_nr,actor) %>%
     summarise(mean_chosen = mean(chosen_numeric),
               mean_percent_chosen = round(mean_chosen * 100, digits=2))
   
   mean_chosen_individual <- mean_chosen_individual %>% mutate(color = if_else(grepl('1', actor), "Condition 1", "Condition 2")) 
-  
+  #plot the complementary percentage for the strategy that is coded as '0'
+  mean_chosen_individual <- mean_chosen_individual %>% mutate(mean_percent_chosen = if_else(color == "Condition 1", 100-mean_percent_chosen, mean_percent_chosen))
   ggplot(data = subset(mean_chosen_individual, subject_nr == subj_num_local),
          aes(x = actor, y = mean_percent_chosen, fill = color)) +
     geom_bar(position = position_dodge(), stat = "identity") +
     scale_x_discrete(name = "Strategies") +
-    scale_y_continuous(name = "Frequency of chosing strategy 2") +
+    scale_y_continuous(name = "Frequency of chosing each strategy") +
     labs(title = paste("Subject ", subj_num_local)) +
     geom_text(aes(label =  paste(mean_percent_chosen, "%")), position = position_dodge(width = 1),
               vjust = -0.5, size = 2)+
     scale_fill_discrete(name="Preferred\nStrategy", 
                         labels=c("Strategy 1", "Strategy 2"))
   
-  ggsave(path="plots", filename = paste("subj",subj_num_local, "_strategy2_freq.png"),
+  ggsave(path="output", filename = paste("subj",subj_num_local, "_strategy2_freq.png"),
     width = 5,
     height = 5)
 }
@@ -126,7 +295,7 @@ for (subj_num_local in subjects) {
 #par(mar=c(1,1,1,1))
 par(mar=c(3,4,3,1))
 
-par(mfrow = c(length(files)/2+1,2))
+par(mfrow = c(length(files_names)/2+1,2))
 p <- list()
 q <- list()
 n <- list()
@@ -285,39 +454,3 @@ theme_set(theme_bw())
 
   
   
-  # 
-  # if(extracted_df$correct == 0){
-  #   if (extracted_df$preferred == 'dist'){
-  #     extracted_df$chosen<-'reap'
-  #     extracted_df$chosen_numeric<-0
-  #   }
-  #   else if (extracted_df$preferred == 'reap'){
-  #     extracted_df$chosen<-'dist'
-  #     extracted_df$chosen_numeric<-1
-  #   }
-  #   else if (extracted_df$preferred == 'sweet'){
-  #     extracted_df$chosen<-'salty'
-  #     extracted_df$chosen_numeric<-0
-  #   }
-  #   else if (extracted_df$preferred == 'salty'){
-  #     extracted_df$chosen<-'sweet'
-  #     extracted_df$chosen_numeric<-1
-  #   }
-  #   else if (extracted_df$preferred == 'blue_closet'){
-  #     extracted_df$chosen<-'wood_closet'
-  #     extracted_df$chosen_numeric<-1
-  #   }
-  #   else if (extracted_df$preferred == 'wood_closet'){
-  #     extracted_df$chosen<-'blue_closet'
-  #     extracted_df$chosen_numeric<-0
-  #   }
-  # }else{
-  #   #the choice taken was correct
-  #   extracted_df$chosen <- extracted_df$preferred
-  #   if(extracted_df$preferred == 'reap' | extracted_df$preferred == 'salty' |  extracted_df$preferred == 'blue_closet'){
-  #     extracted_df$chosen_numeric<-0
-  #   }
-  #   else{ 
-  #     extracted_df$chosen_numeric<-1
-  #   }
-  # }

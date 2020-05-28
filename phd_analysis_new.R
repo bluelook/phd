@@ -8,6 +8,9 @@ library(gridExtra)
 library(gtools)
 library(plot3D)
 library(readxl)
+library(ggpval)
+library(ggpubr)
+
 
 rm(list = ls())
 dev.off() #clear all
@@ -50,7 +53,8 @@ no_act_strat_indep_model <- read_csv("./output/no_act_strat_indep_model.csv")
 
 #act_indep_strat_indep_model <- read.csv("./output/act_indep_strat_indep_model.csv")
 act_indep_strat_indep_model <-  read.csv("./output/sub_act_indep_strat_indep.csv")
-
+all_data <- merge(act_indep_strat_indep_model,subj_data,by = "subject_nr")
+all_data <- all_data %>% mutate(empathy_level = as.integer(TE > median(all_data$TE)))
 num_subj_filtered <- nrow(act_indep_strat_indep_model)
 #num_subj_act_indep_strat_indep <- nrow(act_indep_strat_indep_model)
 #num_subj_no_act_strat_indep <- nrow(no_act_strat_indep_model)
@@ -93,6 +97,8 @@ ggplot(data = bic_stress,
   geom_bar(stat = "identity") +
   labs(title = "stress delta BIC (no generalization vs total generalization) per subject", x =
          "subjects")
+ggsave("./output/stress delta BIC (no generalization vs total generalization).png", width = 5, height = 5)
+
 #delta bic meals
 ggplot(data = bic_meal,
        aes(
@@ -193,13 +199,13 @@ mean_bic_all_models <-
 
 act_indep_strat_indep_model_mutated <-
   act_indep_strat_indep_model %>% mutate (model_name = 'act_indep_strat_indep')
-#no_learning_model_mutated <- no_learning_model %>% mutate (model_name = 'no_learning_model')
+no_learning_model_mutated <- no_learning_model %>% mutate (model_name = 'no_learning_model')
 no_act_strat_indep_model_mutated <-
   no_act_strat_indep_model %>% mutate (model_name = 'no_act_strat_indep_model')
 
 all_models <-
-  rbind(act_indep_strat_indep_model_mutated,
-        no_act_strat_indep_model_mutated)
+  rbind(select(act_indep_strat_indep_model_mutated,BIC_stress,BIC_meal,BIC_room,model_name),
+        select(no_act_strat_indep_model_mutated,BIC_stress,BIC_meal,BIC_room,model_name), select(no_learning_model_mutated,BIC_stress,BIC_meal,BIC_room,model_name))
 ###################### Box plots BIC, alpha, beta ######################
 ggplot(all_models, aes(x = model_name, y = BIC_stress, fill = model_name)) +
   geom_boxplot(alpha = 0.7) +
@@ -331,37 +337,57 @@ ggplot(all_models, aes(x = model_name, y = beta_room, fill = model_name)) +
               alpha = 0.9) +
   scale_fill_brewer(palette = "Set1")
 
-###################### mean bic for all models per condition/block #############
-ggplot(data = mean_bic_all_models, aes(x = model_name, y = m_stress, fill =
+###################### BAR plot mean bic for all models per condition/block #############
+mean_bic_stress_plot <- ggplot(data = mean_bic_all_models, aes(x = model_name, y = m_stress, fill =
                                          model_name)) +
   geom_bar(stat = "identity") +
   geom_errorbar(aes(ymin = m_stress - sem_stress, ymax = m_stress + sem_stress),
                 width = .2) +
   scale_y_continuous(limits = c(0, 70)) +
-  labs(title = "mean bic stress for all models", x = "models", y = "bic stress")
+  scale_x_discrete(labels=c("model-based", "model-free", "open-loop"))+
+  labs(title = "Interpersonal emotion regulation", x = "Models", y = "BIC value")+
+  theme(legend.position = "none", legend.title=element_blank(), legend.text=element_text(size=12),
+        axis.text=element_text(size=12),   axis.title=element_text(size=16),
+        plot.title = element_text(size = 20, face = "bold",hjust=0.5) )+
+  geom_signif(y_position = c(63,68), xmin = c(0.8,0.8), 
+              xmax = c(2,3.2), annotation = c("**","**"))#p=0.00215 **","p=0.00192 **"))
   
 
 ggsave("./output/mean bic stress for all models.png", width = 5, height = 5)
 
-ggplot(data = mean_bic_all_models, aes(x = model_name, y = m_room, fill =
-                                         model_name)) +
-  geom_bar(stat = "identity") +
-  geom_errorbar(aes(ymin = m_room - sem_room, ymax = m_room + sem_room),
-                width = .2) +
-  scale_y_continuous(limits = c(0, 70)) +
-  labs(title = "mean bic rooms for all models", x = "models", y = "bic rooms")
-ggsave("./output/mean bic rooms for all models.png", width = 5, height = 5)
-
-ggplot(data = mean_bic_all_models, aes(x = model_name, y = m_meal, fill =
+mean_bic_meal_plot <- ggplot(data = mean_bic_all_models, aes(x = model_name, y = m_meal, fill =
                                          model_name)) +
   geom_bar(stat = "identity") +
   geom_errorbar(aes(ymin = m_meal - sem_meal, ymax = m_meal + sem_meal),
                 width = .2) +
   scale_y_continuous(limits = c(0, 70)) +
-  labs(title = "mean bic meals for all models", x = "models", y = "bic meals")
+  scale_x_discrete(labels=c("model-based", "model-free", "open-loop"))+
+  labs(title = "Interpersonal food preference", x = "Models", y = "BIC value")+
+  theme(legend.position = "none", legend.title=element_blank(), legend.text=element_text(size=12),
+        axis.text=element_text(size=12),   axis.title=element_text(size=16),
+        plot.title = element_text(size = 20, face = "bold",hjust=0.5) )+
+  geom_signif(y_position = c(63,68), xmin = c(0.8,0.8), xmax = c(2,3.2), annotation = c("*", "**")) #"p=0.04151 *","p=0.002634 **"))
+
 ggsave("./output/mmean bic meals for all models.png", width = 5, height = 5)
 
-###################### mean beta per model per condition/block ########################
+mean_bic_room_plot <- ggplot(data = mean_bic_all_models, aes(x = model_name, y = m_room, fill =
+                                                               model_name)) +
+  geom_bar(stat = "identity") +
+  geom_errorbar(aes(ymin = m_room - sem_room, ymax = m_room + sem_room),
+                width = .2) +
+  scale_y_continuous(limits = c(0, 70)) +
+  scale_x_discrete(labels=c("model-based", "model-free", "open-loop"))+
+  labs(title = "Value-based", x = "Models", y = "BIC value")+
+  theme(legend.position = "none", legend.title=element_blank(), legend.text=element_text(size=12),
+        axis.text=element_text(size=12),   axis.title=element_text(size=16),
+        plot.title = element_text(size = 20, face = "bold",hjust=0.5) )+
+  geom_signif(y_position = c(63,68), xmin = c(0.8,0.8), 
+              xmax = c(2,3.2), annotation = c("**","**"))#p=0.003333 **","p=0.003495 **"))
+
+ggsave("./output/mean bic rooms for all models.png", width = 5, height = 5)
+grid.arrange(mean_bic_stress_plot, mean_bic_meal_plot, mean_bic_room_plot, nrow=1)
+
+###################### BAR plot mean beta per independent model per condition/block between models ########################
 
 mean_beta_no_act_strat_indep <- no_act_strat_indep_model %>%
   summarise(
@@ -423,7 +449,7 @@ ggplot(data = mean_beta_all_models, aes(x = model_name, y = m_meal, fill =
                 width = .2) +
   labs(title = "mean beta meals for all models", x = "models", y = "beta")
 
-###################### mean alpha per model per condition/block #######################
+###################### BAR plot mean alpha per independent model per condition/block #######################
 
 alphas <- select(act_indep_strat_indep_model,alpha_stress, alpha_meal, alpha_room, subject_nr)
 alphas_longer <-  pivot_longer(alphas, alpha_stress: alpha_room, names_to = "alpha_type", values_to = "value")
@@ -433,7 +459,9 @@ ggplot(data = alphas_grouped, aes(x = alpha_type, y = mean, fill =alpha_type)) +
   geom_bar(stat = "identity") +
   geom_errorbar(aes(ymin = mean - sem, ymax = mean + sem), width = .2) +
   labs(title = "mean alpha", x = "alpha type", y ="value")+
-  scale_y_continuous(breaks = seq(0, 1, 0.1), limits = c(0,0.4) )
+  scale_y_continuous(breaks = seq(0, 1, 0.1), limits = c(0,0.4) )+
+  geom_signif(y_position = c(0.35,0.25,0.38), xmin = c(0.8,1.9,0.8), 
+              xmax = c(1.6,2.7,3), annotation = c("NS","NS","NS"))
 ggsave("./output/mean alpha bar plot per condition.png", width = 5, height = 5)
 
 ggplot(alphas_longer, aes(x = alpha_type, y = value, fill = alpha_type)) +
@@ -501,7 +529,7 @@ ggplot(data = mean_alpha_all_models, aes(x = model_name, y = m_meal, fill =
   labs(title = "mean alpha meals for learning models", x = "models", y =
          "alpha")
 
-###################### alpha correlations between domains within one model ##############
+###################### alpha correlations between domains within one model - lm ##############
 act_indep_strat_indep_model_mutated$subject_nr <- factor(act_indep_strat_indep_model_mutated$subject_nr)
 a_m_s <- ggplot(data = act_indep_strat_indep_model_mutated, aes(x = alpha_meal, y = alpha_stress)) +
   geom_point(aes(size = alpha_room, colour = factor(subject_nr), fill=factor(subject_nr)))+
@@ -520,7 +548,38 @@ ggsave("./output/alphas_r_s.png", width = 5, height = 5)
 
 grid.arrange(a_m_s, a_m_r, a_r_s, ncol=2, nrow=2)
 
-###################### beta correlations between domains within one model ###########
+###################### BAR plot mean beta per model per condition/block #######################
+betas <- select(act_indep_strat_indep_model,beta_stress, beta_meal, beta_room, subject_nr)
+betas_longer <-  pivot_longer(betas, beta_stress: beta_room, names_to = "beta_type", values_to = "value")
+betas_grouped <- betas_longer %>% group_by(beta_type) %>% summarise(mean = mean(value), sem = sd(value)/sqrt(num_subj_filtered))
+#bar plot means of beta for specific model
+ggplot(data = betas_grouped, aes(x = beta_type, y = mean, fill =beta_type)) +
+  geom_bar(stat = "identity") +
+  geom_errorbar(aes(ymin = mean - sem, ymax = mean + sem), width = .2) +
+  labs(title = "mean beta", x = "beta type", y ="value")+
+  scale_y_continuous(breaks = seq(0, 15, 1), limits = c(0,15) )+
+  geom_signif(y_position = c(10,11.2,12), xmin = c(0.8,2.2,0.8), 
+              xmax = c(1.6,2.9,3), annotation = c("NS","NS","NS"))
+
+ggsave("./output/mean beta bar plot per condition.png", width = 5, height = 5)
+
+ggplot(betas_longer, aes(x = beta_type, y = value, fill = beta_type)) +
+  geom_boxplot(alpha = 0.7) +
+  stat_summary(
+    fun = mean,
+    geom = "point",
+    shape = 20,
+    size = 10,
+    color = "green"
+  ) +
+  theme(legend.position = "none") +
+  geom_jitter(color = "black",
+              size = 1.2,
+              alpha = 0.9) +
+  scale_fill_brewer(palette = "Set1")
+ggsave("./output/mean beta box plot per condition.png", width = 5, height = 5)
+
+###################### beta correlations between domains within one model - lm ###########
 b_m_s <- ggplot(data = act_indep_strat_indep_model_mutated, aes(x = beta_meal, y = beta_stress)) +
   geom_point(aes(size = beta_room, colour = factor(subject_nr), fill=factor(subject_nr)))+
   geom_smooth(method = "lm", se = FALSE, color="red")
@@ -538,6 +597,8 @@ grid.arrange(b_m_s, b_m_r, b_r_s, ncol=2, nrow=2)
 full_df_filtered <- subset(full_df, subject_nr %in% act_indep_strat_indep_model$subject_nr)
 
 extracted_df <- select(full_df_filtered, subject_nr, actor, correct, preferred)
+
+
 #for each row convert choices to numeric values
 for (i in 1:nrow(extracted_df)) {
   #if the choice taken was incorrect
@@ -588,6 +649,9 @@ for (i in 1:nrow(extracted_df)) {
   }
 }
 
+extracted_df <- extracted_df %>%  mutate(chosen_fixed = if_else(grepl('1', actor), 1 - chosen_numeric, chosen_numeric))
+extracted_df_indexed <- extracted_df %>% group_by(subject_nr,actor) %>% mutate(id = row_number())
+#extracted_df <- extracted_df_indexed %>% filter(id>=10)
 #descriptive statistics
 #summary(extracted_df)
 
@@ -596,6 +660,7 @@ for (i in 1:nrow(extracted_df)) {
 
 subjects <- unique(extracted_df$subject_nr)
 theme_set(theme_bw())
+#mean_steps <- extracted_df_indexed %>% group_by(id, actor) %>% summarise(mean_percent = mean(chosen_numeric)*100,sem = sd(chosen_numeric * 100) / sqrt(num_subj_filtered)) %>% mutate(color = if_else(grepl('1', actor), "Condition 1", "Condition 2"))  %>% ungroup()
 
 #mean by actor between subjects with corrected mean for "0" coded actor
 mean_chosen_all <-
@@ -609,16 +674,20 @@ mean_chosen_all <-
     mean = if_else(color == "Condition 1", 1 - mean, mean),
     mean_percent = round(mean * 100, digits = 2)
   )
+#chosen_all <-
+ # extracted_df %>% mutate(color = if_else(grepl('1', actor), "Condition 1", "Condition 2")) %>%
+t.test(extracted_df$chosen_numeric[extracted_df$actor=='r1'], extracted_df$chosen_numeric[extracted_df$actor=='m1'], paired = TRUE, alternative = "two.sided")
 
-#plot the mean by actor
+
+#BAR plot the mean by actor between subjects
 ggplot(data = mean_chosen_all,
        aes(x = actor, y = mean_percent, fill = color)) +
   geom_bar(position = position_dodge(), stat = "identity") +
   geom_errorbar(aes(ymin = mean_percent - sem, ymax = mean_percent + sem),
                 width = .2) +
-  scale_x_discrete(name = "Strategies") +
-  scale_y_continuous(name = "Mean Frequency  ") +
-  labs(title = "Frequency of choosing preferred strategy - between subjects") +
+  scale_x_discrete(name = "Actors") +
+  scale_y_continuous(name = "Choice frequency") +
+  #labs(title = "Frequency of choosing preferred strategy - between subjects") +
   geom_text(
     aes(label =  paste(mean_percent, "%")),
     position = position_dodge(width = 1),
@@ -731,69 +800,62 @@ subj_data_merged <-
         subj_data,
         by = "subject_nr",
         all.x = TRUE)
-#subj_data_merged <- merge(subj_data_merged, model_subj_data, by = "subject_nr")
-#subj_data_merged <- merge(subj_data_merged,bic_data,by="subject_nr")
-#subj_data_merged_filtered <- subj_data_merged[subj_data_merged$BIC_act_dep < 60 &
-                     #subj_data_merged$BIC_act_ind < 60 &
-                     #subj_data_merged$BIC_act_dep_2A < 60 &
-                     #subj_data_merged$BIC_act_ind_2A < 60, ]
 
-
-#make the columns to be rows to benefit from pipes
-#bic_data_gathered <-
-  #gather(
-  #  subj_data_merged_filtered %>% select(BIC_act_dep, BIC_no_act, BIC_act_ind),
-  #  key = 'model',
-  #  value = 'bic',
-  #  factor_key = TRUE  )
-
-
-# Model Comparison - calculate mean of bic and sem per each model
-#mean_bic <-   bic_data_gathered %>% group_by(model) %>% summarise(mean = mean(bic),  sem = sd(bic) / sqrt(num_subjects))
-#my_comparisons <-   list(     c("BIC_act_dep", "BIC_no_act"),     c("BIC_no_act", "BIC_act_ind"),     c("BIC_act_dep", "BIC_act_ind")   )
-#compare_means(bic ~ model,  data = bic_data_gathered, method = "anova")
-
-#ggplot(bic_data_gathered, aes(x = model, y = bic, fill = model)) +
-#  geom_point(shape = 21, size = 10) +
- # #geom_errorbar(aes(ymin = bic - sem, ymax = bic + sem), width = 0.2) +
-#  labs(title = paste(
- #   "Models Comparison p dep vs ind =",
-  #  format(t_bic_act_dep_ind$p.value, digits = 2),
-   # ", p dep vs no act = ",
-  #  format(t_bic_act_dep_no_act$p.value, digits = 2)
-  #)) +
-  #scale_x_discrete(name = "Model") +
-  #scale_y_continuous(name = "BIC") +
-  #theme(legend.title = element_blank()) + stat_compare_means(comparisons = my_comparisons) +
-  #  Add pairwise comparisons p-value
-#  stat_compare_means(label.y = 85)
 
 ###################### playing with stats#####
-#paired t tests 
+# BIC comparisons between models - paired t tests two sided
+#distress
+#M3 vs M2
 t.test(act_indep_strat_indep_model$BIC_stress, no_act_strat_indep_model$BIC_stress, paired = TRUE, alternative = "two.sided")
+#M3 vs M1
+t.test(act_indep_strat_indep_model$BIC_stress, no_learning_model$BIC_stress, paired = TRUE, alternative = "two.sided")
+
+#food
+#M3 vs M2
 t.test(act_indep_strat_indep_model$BIC_meal, no_act_strat_indep_model$BIC_meal, paired = TRUE, alternative = "two.sided")
+#M3 vs M1
+t.test(act_indep_strat_indep_model$BIC_meal, no_learning_model$BIC_meal, paired = TRUE, alternative = "two.sided")
+
+#value-based
+#M3 vs M2
 t.test(act_indep_strat_indep_model$BIC_room, no_act_strat_indep_model$BIC_room, paired = TRUE, alternative = "two.sided")
+#M3 vs M1
+t.test(act_indep_strat_indep_model$BIC_room, no_learning_model$BIC_room, paired = TRUE, alternative = "two.sided")
+
+#apha comparisons within M3 model - paired t tests two sided
 t.test(act_indep_strat_indep_model$alpha_stress, act_indep_strat_indep_model$alpha_meal, paired = TRUE, alternative = "two.sided")
 t.test(act_indep_strat_indep_model$alpha_stress, act_indep_strat_indep_model$alpha_room, paired = TRUE, alternative = "two.sided")
+t.test(act_indep_strat_indep_model$alpha_meal, act_indep_strat_indep_model$alpha_room, paired = TRUE, alternative = "two.sided")
+
+#comparison of alpha distress/food/value-based for high and low empathy levels - indep t test
+t.test(all_data$alpha_stress[all_data$empathy_level==1], all_data$alpha_stress[all_data$empathy_level==0], paired=FALSE, alternative = "two.sided")
+t.test(all_data$alpha_meal[all_data$empathy_level==1], all_data$alpha_meal[all_data$empathy_level==0], paired=FALSE, alternative = "two.sided")
+t.test(all_data$alpha_room[all_data$empathy_level==1], all_data$alpha_room[all_data$empathy_level==0], paired=FALSE, alternative = "two.sided")
+
 #simple linear regression,"YVAR ~ XVAR" where YVAR is the dependent, or predicted,XVAR is the independent, or predictor
-lm1 <- lm(sAlpha_act_ind ~ CE, data = subj_data_merged_filtered)
+#check whether empathy or its components predict learning rate in distress condition
+lm1 <- lm(alpha_stress ~ TE, data = all_data)
 summary(lm1)
+lm2 <- lm(alpha_stress ~ CE, data = all_data)
+summary(lm2)
+lm3 <- lm(alpha_stress ~ AE, data = all_data)
+summary(lm3)
 
 glm_s <-
-  glm(s ~ sAlpha_act_ind,
-      data = subj_data_merged_filtered,
+  glm(alpha_stress ~ CE,
+      data = all_data,
       family = gaussian(link = "identity"))
 summary(glm_s)
 
-ggplot(subj_data_merged_filtered, aes(y = s, x = sAlpha_act_dep)) +
+ggplot(all_data, aes(y = alpha_stress, x = CE)) +
   geom_point() +
   stat_smooth(
     method = "glm",
     se = F,
     method.args = list(family = gaussian())
   ) +
-  ylab('stress mean value dist from chance') +
-  xlab('stress learning rate')
+  ylab('distress learning rate') +
+  xlab('empathy level')
 
 learning_rates <-
   select(
@@ -822,8 +884,8 @@ ggplot(data = learning_rates_mean,
   geom_errorbar(aes(ymin = mean - sem, ymax = mean + sem),
                 width = .2)
 
-# Compute the analysis of variance
-res.aov <- aov(value ~ learning_rate, data = learning_rates_longer)
+# Compute the analysis of variance: two-way anova - we want to know if learning rate in distress condition depends on empathy score and cognitive reappraisal preference
+res.aov <- aov(alpha_stress ~ CE*CR, data = all_data)
 # Summary of the analysis
 summary(res.aov)
 
@@ -876,10 +938,6 @@ for (subj_num_local in subjects) {
   )
 }
 
-#res <-t.test(needed_df[needed_df$actor=='s2',]$chosen_numeric, needed_df[needed_df$actor=='m2',]$chosen_numeric,var.equal = TRUE)
-#res <-t.test(data[data$actor=='s2',]$chosen_numeric, data[data$actor=='m2',]$chosen_numeric,var.equal = TRUE)
-#print(substring(csv,1,9), res)
-
 ###################### create plot for choices over trials per subject, 1 - pref of actor 2, 0 pref of actor 1############
 
 par(mfrow = c(length(subjects) / 2 + 1, 2))
@@ -917,8 +975,7 @@ do.call(grid.arrange, stress_plots)
 do.call(grid.arrange, meal_plots)
 do.call(grid.arrange, room_plots)
 
-###################### plot of mean choices per each trial between subjects #########################
-extracted_df_indexed <- extracted_df %>% group_by(subject_nr,actor) %>% mutate(id = row_number())
+###################### SMOOTH plot of mean choices per each trial between subjects #########################
 mean_steps <- extracted_df_indexed %>% group_by(id, actor) %>% summarise(mean = mean(chosen_numeric))
 mean_steps_s1 <- mean_steps %>% filter(actor=="s1")
 mean_steps_s2 <- mean_steps %>% filter(actor=="s2")
@@ -928,55 +985,206 @@ mean_steps_r1 <- mean_steps %>% filter(actor=="r1")
 mean_steps_r2 <- mean_steps %>% filter(actor=="r2")
 
 #add plots for stress actors with mean choice values, two in one graph
-ggplot()+
+mean_steps_stress <- ggplot()+
   geom_smooth(data=mean_steps_s1,aes(x =id ,y = mean, col = "Actor 1"), size = 2) +
   geom_smooth(data=mean_steps_s2,aes(x = id, y = mean, col = "Actor 2"), size = 2) +
-  scale_y_continuous(name="Actor 2 preferable choices", breaks = seq(0, 1, 0.25)) +
+  scale_y_continuous(name="Choice frequency", breaks = seq(0, 1, 0.25)) +
   scale_x_continuous(name="Trial", breaks = seq(0, 20, 4)) +
-  labs(title = "Mean choices for stress") +
+  labs(title = "Interpersonal Emotion Regulation") +
   theme(
     legend.position = "bottom",
     legend.title = element_blank(),
-    plot.title = element_text(size = 20, face = "bold"),
+    plot.title = element_text(size = 18, face = "bold"),
     axis.title.x = element_text(size = 17, vjust = -0.35),
     axis.title.y = element_text(size = 15, vjust = 0.5),
     axis.text.x = element_text(size = 12, vjust = 0.5),
     axis.text.y = element_text(size = 15, vjust = 0.5)
   )
-ggsave("./output/mean steps stress.png", width = 5, height = 5)
+ggsave("./output/mean steps distress.png", width = 5, height = 5)
 
 #add plots for meal actors with mean choice values, two in one graph
-ggplot()+
+mean_steps_meals <- ggplot()+
   geom_smooth(data=mean_steps_m1,aes(x =id ,y = mean, col = "Actor 1"), size = 2) +
   geom_smooth(data=mean_steps_m2,aes(x = id, y = mean, col = "Actor 2"), size = 2) +
-  scale_y_continuous(name="Actor 2 preferable choices", breaks = seq(0, 1, 0.25)) +
+  scale_y_continuous(name="Choice frequency", breaks = seq(0, 1, 0.25)) +
   scale_x_continuous(name="Trial", breaks = seq(0, 20, 4)) +
-  labs(title = "Mean choices for meals") +
+  labs(title = "Interpersonal Food Preference") +
   theme(
     legend.position = "bottom",
     legend.title = element_blank(),
-    plot.title = element_text(size = 20, face = "bold"),
+    plot.title = element_text(size = 18, face = "bold"),
     axis.title.x = element_text(size = 17, vjust = -0.35),
     axis.title.y = element_text(size = 15, vjust = 0.5),
     axis.text.x = element_text(size = 12, vjust = 0.5),
     axis.text.y = element_text(size = 15, vjust = 0.5)
   )
-ggsave("./output/mean steps meals.png", width = 5, height = 5)
+ggsave("./output/mean steps food.png", width = 5, height = 5)
 
 #add plots for stress actors with mean choice values, two in one graph
-ggplot()+
+
+mean_steps_rooms <- ggplot()+
   geom_smooth(data=mean_steps_r1,aes(x =id ,y = mean, col = "Actor 1"), size = 2) +
   geom_smooth(data=mean_steps_r2,aes(x = id, y = mean, col = "Actor 2"), size = 2) +
-  scale_y_continuous(name="Actor 2 preferable choices", breaks = seq(0, 1, 0.25)) +
+  scale_y_continuous(name="Choice frequency", breaks = seq(0, 1, 0.25)) +
   scale_x_continuous(name="Trial", breaks = seq(0, 20, 4)) +
-  labs(title = "Mean choices for rooms") +
+  labs(title = "Value-based") +
   theme(
     legend.position = "bottom",
     legend.title = element_blank(),
-    plot.title = element_text(size = 20, face = "bold"),
+    plot.title = element_text(size = 18, face = "bold"),
     axis.title.x = element_text(size = 17, vjust = -0.35),
     axis.title.y = element_text(size = 15, vjust = 0.5),
     axis.text.x = element_text(size = 12, vjust = 0.5),
     axis.text.y = element_text(size = 15, vjust = 0.5)
   )
 ggsave("./output/mean steps rooms.png", width = 5, height = 5)
+grid.arrange(mean_steps_stress, mean_steps_meals, mean_steps_rooms, nrow=1)
+
+###################### plots for proposal about predicted models ###########################
+
+id = c(1:20)
+
+const_1 <- rep(0.65,20)
+const_2 <- rep(0.7,20)
+df_c_1 <- data.frame(id,const_1)
+df_c_2 <- data.frame(id,const_2)
+
+no_l <- ggplot() +
+  geom_line(data=df_c_1,aes(x =id ,y = const_1, col = "Actor 1"), size = 3) +
+  geom_line(data=df_c_1,aes(x =id ,y = const_1, col = "Actor 2"), size = 1, linetype="dashed") +
+  scale_y_continuous(name="Frequency of choosing strategy 1", limits = c(0, 1),breaks = seq(0, 1, 0.25)) +
+  scale_x_continuous(name="Trials")+
+  labs(title = "No actor")+ 
+  theme(
+    axis.text=element_text(size=12),
+    axis.text.x = element_blank(),
+    axis.ticks = element_blank(), 
+    axis.title=element_text(size=14),
+    panel.grid.minor = element_blank(),
+    panel.background = element_rect(fill = "white"),
+    axis.line = element_line(size = 0.5, linetype = "solid", colour = "black"),
+    plot.title = element_text(size = 20, face = "bold",hjust=0.5),
+    legend.position = "bottom", legend.title=element_blank(), legend.text=element_text(size=12),
+    plot.subtitle = element_text(color = "black", face = "italic", hjust = 0.5))+
+  scale_color_manual(values = c('Actor 1' = 'orange','Actor 2' = 'darkblue'))+
+  labs(title = "No learning", subtitle="Stable strategy preference to both actors")
+
+mean_v_1 <- seq(0.5, 0.8, length.out = 8)
+mean_v_1 <- append(mean_v_1, rep(0.8, 12), 8)
+df_1 <- data.frame(id,mean_v_1)
+mean_v_2 <- seq(0.5, 0.2, length.out = 8)
+mean_v_2 <- append(mean_v_2, rep(0.2, 12), 8)
+df_2 <- data.frame(id,mean_v_2)
+
+c_l <-ggplot()+
+  geom_smooth(data=df_1,aes(x =id ,y = mean_v_1, color="Actor 1"), size = 2,se=FALSE, ) +
+  geom_smooth(data=df_2,aes(x =id ,y = mean_v_2, color="Actor 2"), size = 2,se=FALSE, linetype="dashed") +
+  scale_y_continuous(name="Frequency of choosing strategy 1", limits = c(0, 1),breaks = seq(0, 1, 0.25)) +
+  scale_x_continuous(name="Trials")+
+  theme(
+    #axis.title.y=element_blank(),
+    axis.text=element_text(size=12),
+    axis.text.x = element_blank(),
+    axis.ticks = element_blank(), 
+    axis.title=element_text(size=14),
+    panel.grid.minor = element_blank(),
+    panel.background = element_rect(fill = "white"),
+    axis.line = element_line(size = 0.5, linetype = "solid",colour = "black"),
+    plot.title = element_text(size = 20, face = "bold",hjust=0.5),
+    legend.position = "bottom", legend.title=element_blank(), legend.text=element_text(size=12),
+    plot.subtitle = element_text(color = "black", face = "italic",hjust = 0.5))+
+  scale_color_manual(values = c('Actor 1' = 'orange','Actor 2' = 'darkblue')) +
+  labs(title = "Context learning", subtitle = "Fluctuations based on feedback due to ignoring actor identity")
+
+
+mean_v_4 <- c(0.5, 0.6,0.65,0.7,0.75,0.7,0.6,0.55,0.5,0.66,0.7,0.75,0.7,0.65,0.5,0.45,0.5,0.61,0.7,0.5)
+mean_v_3 <- mean_v_4+0.1
+#mean_v_3 <- c(0.5, 0.55,0.6,0.62,0.65,0.75,0.7,0.65,0.6,0.56,0.6,0.7,0.75,0.72,0.6,0.55,0.4,0.51,0.65,0.6)
+df_3 <- data.frame(id,mean_v_3)
+df_4 <- data.frame(id,mean_v_4)
+
+no_c_l <-ggplot()+
+  geom_line(data=df_3,aes(x =id ,y = mean_v_3, col = "Actor 1"), size = 3) +
+  geom_line(data=df_3,aes(x =id ,y = mean_v_3, col = "Actor 2"), size = 1, linetype="dashed") +
+  scale_y_continuous(name="Frequency of choosing strategy 1", limits = c(0, 1),breaks = seq(0, 1, 0.25)) +
+  scale_x_continuous(name="Trials")+
+  theme(
+    #axis.title.y=element_blank(),
+    axis.text=element_text(size=12),
+    axis.text.x = element_blank(),
+    axis.ticks = element_blank(), 
+    axis.title=element_text(size=14),
+    panel.grid.minor = element_blank(),
+    panel.background = element_rect(fill = "white"),
+    axis.line = element_line(size = 0.5, linetype = "solid", colour = "black"),
+    plot.title = element_text(size = 20, face = "bold",hjust=0.5),
+    legend.position = "bottom", legend.title=element_blank(), legend.text=element_text(size=12),
+    plot.subtitle = element_text(color = "black", face = "italic", hjust = 0.5))+
+  scale_color_manual(values = c('Actor 1' = 'orange','Actor 2' = 'darkblue'))+
+  labs(title = "No context learning", subtitle = "Proper learning of each actor independently")
+#grid.arrange(no_l,no_c_l,c_l, nrow=1)
+
+
+###################### mean BIC per independent model per condition/block #######################
+# bics <- select(act_indep_strat_indep_model,BIC_stress, BIC_meal, BIC_room, subject_nr)
+# bics_longer <-  pivot_longer(bics, BIC_stress: BIC_room, names_to = "bic_type", values_to = "value")
+# bics_grouped <- bics_longer %>% group_by(bic_type) %>% summarise(mean = mean(value), sem = sd(value)/sqrt(num_subj_filtered))
+# #bar plot means of bic for specific model
+# ggplot(data = bics_grouped, aes(x = bic_type, y = mean, fill =bic_type)) +
+#   geom_bar(stat = "identity") +
+#   geom_errorbar(aes(ymin = mean - sem, ymax = mean + sem), width = .2) +
+#   labs(title = "mean bic", x = "bic type", y ="value")+
+#   scale_y_continuous(breaks = seq(0, 70, 10), limits = c(0,70 ))
+# ggsave("./output/mean bic bar plot per condition.png", width = 5, height = 5)
+# 
+# ggplot(bics_longer, aes(x = bic_type, y = value, fill = bic_type)) +
+#   geom_boxplot(alpha = 0.7) +
+#   stat_summary(
+#     fun = mean,
+#     geom = "point",
+#     shape = 20,
+#     size = 10,
+#     color = "green"
+#   ) +
+#   theme(legend.position = "none") +
+#   geom_jitter(color = "black",
+#               size = 1.2,
+#               alpha = 0.9) +
+#   scale_fill_brewer(palette = "Set1")
+# ggsave("./output/mean bic box plot per condition.png", width = 5, height = 5)
+#subj_data_merged <- merge(subj_data_merged, model_subj_data, by = "subject_nr")
+#subj_data_merged <- merge(subj_data_merged,bic_data,by="subject_nr")
+#subj_data_merged_filtered <- subj_data_merged[subj_data_merged$BIC_act_dep < 60 &
+#subj_data_merged$BIC_act_ind < 60 &
+#subj_data_merged$BIC_act_dep_2A < 60 &
+#subj_data_merged$BIC_act_ind_2A < 60, ]
+
+
+#make the columns to be rows to benefit from pipes
+#bic_data_gathered <-
+#gather(
+#  subj_data_merged_filtered %>% select(BIC_act_dep, BIC_no_act, BIC_act_ind),
+#  key = 'model',
+#  value = 'bic',
+#  factor_key = TRUE  )
+
+
+# Model Comparison - calculate mean of bic and sem per each model
+#mean_bic <-   bic_data_gathered %>% group_by(model) %>% summarise(mean = mean(bic),  sem = sd(bic) / sqrt(num_subjects))
+#my_comparisons <-   list(     c("BIC_act_dep", "BIC_no_act"),     c("BIC_no_act", "BIC_act_ind"),     c("BIC_act_dep", "BIC_act_ind")   )
+#compare_means(bic ~ model,  data = bic_data_gathered, method = "anova")
+
+#ggplot(bic_data_gathered, aes(x = model, y = bic, fill = model)) +
+#  geom_point(shape = 21, size = 10) +
+# #geom_errorbar(aes(ymin = bic - sem, ymax = bic + sem), width = 0.2) +
+#  labs(title = paste(
+#   "Models Comparison p dep vs ind =",
+#  format(t_bic_act_dep_ind$p.value, digits = 2),
+# ", p dep vs no act = ",
+#  format(t_bic_act_dep_no_act$p.value, digits = 2)
+#)) +
+#scale_x_discrete(name = "Model") +
+#scale_y_continuous(name = "BIC") +
+#theme(legend.title = element_blank()) + stat_compare_means(comparisons = my_comparisons) +
+#  Add pairwise comparisons p-value
+#  stat_compare_means(label.y = 85)

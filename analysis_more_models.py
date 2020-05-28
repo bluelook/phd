@@ -13,8 +13,8 @@ import glob
 mpl.use('agg')
 
 # M0:baseline model, no learning, preference to one strategy only, choice: dist, sweet, wood_closet
+#teta = {q_2, beta), choice: dist, sweet, wood_closet
 def log_likelihood_no_learning(teta, data, choice):
-    # d=distraction, r=reappraisal
     q_2 = teta[0]  # q_d, q_sw, q_w
     q_1 = 1 - q_2  # q_r, q_sa, q_b
     beta = teta[1]
@@ -59,12 +59,12 @@ def log_likelihood_no_actor(teta, data, choice, oneAB):
     return minus_ll  # return -LL
 
 # Model M2AB1/2: each actor is learned independently, no relation between them. oneAB=true:the strategies are the opposite of each other, oneAB=false: the strategies are the independent of each other.
-# teta = {alpha,beta} => {learning rate, 1/T (noise)}, choice: dist, sweet, wood_closet, a_1: s1, m1, r1 (actor)
-def log_likelihood_actor_ind_one_arm_b(teta, data, choice, a_1, oneAB):
-    q_a1_d = 0.5
-    q_a1_r = 0.5
-    q_a2_d = 0.5
-    q_a2_r = 0.5
+# teta = {alpha,beta} => {learning rate, 1/T (noise)}, choice: dist, sweet, wood_closet; a_1: s1, m1, r1 (actor)
+def log_likelihood_actor_ind(teta, data, choice, a_1, oneAB):
+    q_a1_2 = 0.5
+    q_a1_1 = 0.5
+    q_a2_2 = 0.5
+    q_a2_1 = 0.5
     alpha = teta[0]
     beta = teta[1]
     # 4 p choice options, calculate specific p and add to the list of p choices, only for people
@@ -74,26 +74,26 @@ def log_likelihood_actor_ind_one_arm_b(teta, data, choice, a_1, oneAB):
         reward = row['reward']
         if row['actor'] == a_1:
             if row['selected_choice'] == choice:
-                p_choice_list.append(np.exp(beta * q_a1_d) / (np.exp(beta * q_a1_d) + np.exp(beta * q_a1_r)))
-                q_a1_d = q_a1_d + alpha * (reward - q_a1_d)
+                p_choice_list.append(np.exp(beta * q_a1_2) / (np.exp(beta * q_a1_2) + np.exp(beta * q_a1_1)))
+                q_a1_2 = q_a1_2 + alpha * (reward - q_a1_2)
                 if oneAB:
-                    q_a1_r = 1 - q_a1_d
+                    q_a1_1 = 1 - q_a1_2
             else:
-                p_choice_list.append(np.exp(beta * q_a1_r) / (np.exp(beta * q_a1_r) + np.exp(beta * q_a1_d)))
-                q_a1_r = q_a1_r + alpha * (reward - q_a1_r)
+                p_choice_list.append(np.exp(beta * q_a1_1) / (np.exp(beta * q_a1_1) + np.exp(beta * q_a1_2)))
+                q_a1_1 = q_a1_1 + alpha * (reward - q_a1_1)
                 if oneAB:
-                    q_a1_d = 1 - q_a1_r
+                    q_a1_2 = 1 - q_a1_1
         else:  # actor_2
             if row['selected_choice'] == 'dist':
-                p_choice_list.append(np.exp(beta * q_a2_d) / (np.exp(beta * q_a2_d) + np.exp(beta * q_a2_r)))
-                q_a2_d = q_a2_d + alpha * (reward - q_a2_d)
+                p_choice_list.append(np.exp(beta * q_a2_2) / (np.exp(beta * q_a2_2) + np.exp(beta * q_a2_1)))
+                q_a2_2 = q_a2_2 + alpha * (reward - q_a2_2)
                 if oneAB:
-                    q_a2_r = 1 - q_a2_d
+                    q_a2_1 = 1 - q_a2_2
             else:
-                p_choice_list.append(np.exp(beta * q_a2_r) / (np.exp(beta * q_a2_r) + np.exp(beta * q_a2_d)))
-                q_a2_r = q_a2_r + alpha * (reward - q_a2_r)
+                p_choice_list.append(np.exp(beta * q_a2_1) / (np.exp(beta * q_a2_1) + np.exp(beta * q_a2_2)))
+                q_a2_1 = q_a2_1 + alpha * (reward - q_a2_1)
                 if oneAB:
-                    q_a2_d = 1 - q_a2_r
+                    q_a2_2 = 1 - q_a2_1
         # sum over the log of the list of probabilities
     minus_ll = -np.log(p_choice_list).sum()
     return minus_ll  # return -LL
@@ -101,10 +101,10 @@ def log_likelihood_actor_ind_one_arm_b(teta, data, choice, a_1, oneAB):
 # Model M3AB1/2: the actors are the opposite of each other, oneAB=true:the strategies are the opposite of each other, oneAB=false: the strategies are the independent of each other
 # teta = {alpha,beta} => {learning rate, 1/T (noise)},choice: dist, sweet, wood_closet, a_1: s1, m1, r1 (actor)
 def log_likelihood_actor_dep(teta, data, choice, a_1, oneAB):
-    q_a1_d = 0.5
-    q_a1_r = 0.5
-    q_a2_d = 0.5
-    q_a2_r = 0.5
+    q_a1_2 = 0.5
+    q_a1_1 = 0.5
+    q_a2_2 = 0.5
+    q_a2_1 = 0.5
     alpha = teta[0]
     beta = teta[1]
     # 4 p choice options, calculate specific p and add to the list of p choices
@@ -114,38 +114,37 @@ def log_likelihood_actor_dep(teta, data, choice, a_1, oneAB):
         reward = row['reward']
         if row['actor'] == a_1:
             if row['selected_choice'] == choice:
-                p_choice_list.append(np.exp(beta * q_a1_d) / (np.exp(beta * q_a1_d) + np.exp(beta * q_a1_r)))
-                q_a1_d = q_a1_d + alpha * (reward - q_a1_d)
-                q_a2_r = q_a2_r + alpha * (
-                        reward - q_a2_r)  # the opposite strategy of the opposite actor, generalization of learned on the other person
+                p_choice_list.append(np.exp(beta * q_a1_2) / (np.exp(beta * q_a1_2) + np.exp(beta * q_a1_1)))
+                q_a1_2 = q_a1_2 + alpha * (reward - q_a1_2)
+                q_a2_1 = q_a2_1 + alpha * (reward - q_a2_1)  # the opposite strategy of the opposite actor, generalization of learned on the other person
                 if oneAB:  # opposite strategy update
-                    q_a1_r = 1 - q_a1_d
-                    q_a2_d = 1 - q_a2_r
+                    q_a1_1 = 1 - q_a1_2
+                    q_a2_2 = 1 - q_a2_1
             else:
-                p_choice_list.append(np.exp(beta * q_a1_r) / (np.exp(beta * q_a1_r) + np.exp(beta * q_a1_d)))
-                q_a1_r = q_a1_r + alpha * (reward - q_a1_r)
-                q_a2_d = q_a2_d + alpha * (
-                        reward - q_a2_d)  # the opposite strategy of the opposite actor, generalization of learned on the other person
+                p_choice_list.append(np.exp(beta * q_a1_1) / (np.exp(beta * q_a1_1) + np.exp(beta * q_a1_2)))
+                q_a1_1 = q_a1_1 + alpha * (reward - q_a1_1)
+                q_a2_2 = q_a2_2 + alpha * (
+                        reward - q_a2_2)  # the opposite strategy of the opposite actor, generalization of learned on the other person
                 if oneAB:  # opposite strategy update
-                    q_a1_d = 1 - q_a1_r
-                    q_a2_r = 1 - q_a2_d
+                    q_a1_2 = 1 - q_a1_1
+                    q_a2_1 = 1 - q_a2_2
         else:  # a2
             if row['selected_choice'] == choice:
-                p_choice_list.append(np.exp(beta * q_a2_d) / (np.exp(beta * q_a2_d) + np.exp(beta * q_a2_r)))
-                q_a2_d = q_a2_d + alpha * (reward - q_a2_d)
-                q_a1_r = q_a1_r + alpha * (
-                        reward - q_a1_r)  # the opposite strategy of the opposite actor, generalization of learned on the other person
+                p_choice_list.append(np.exp(beta * q_a2_2) / (np.exp(beta * q_a2_2) + np.exp(beta * q_a2_1)))
+                q_a2_2 = q_a2_2 + alpha * (reward - q_a2_2)
+                q_a1_1 = q_a1_1 + alpha * (
+                        reward - q_a1_1)  # the opposite strategy of the opposite actor, generalization of learned on the other person
                 if oneAB:  # opposite strategy update
-                    q_a2_r = 1 - q_a2_d
-                    q_a1_d = 1 - q_a1_r
+                    q_a2_1 = 1 - q_a2_2
+                    q_a1_2 = 1 - q_a1_1
             else:
-                p_choice_list.append(np.exp(beta * q_a2_r) / (np.exp(beta * q_a2_r) + np.exp(beta * q_a2_d)))
-                q_a2_r = q_a2_r + alpha * (reward - q_a2_r)
-                q_a1_d = q_a1_d + alpha * (
-                        reward - q_a1_d)  # the opposite strategy of the opposite actor, generalization of learned on the other person
+                p_choice_list.append(np.exp(beta * q_a2_1) / (np.exp(beta * q_a2_1) + np.exp(beta * q_a2_2)))
+                q_a2_1 = q_a2_1 + alpha * (reward - q_a2_1)
+                q_a1_2 = q_a1_2 + alpha * (
+                        reward - q_a1_2)  # the opposite strategy of the opposite actor, generalization of learned on the other person
                 if oneAB:  # opposite strategy update
-                    q_a2_d = 1 - q_a2_r
-                    q_a1_r = 1 - q_a1_d
+                    q_a2_2 = 1 - q_a2_1
+                    q_a1_1 = 1 - q_a1_2
         # sum over the log of the list of probabilities
     minus_ll = -np.log(p_choice_list).sum()
     return minus_ll  # return -LL
@@ -215,6 +214,10 @@ optMinDfStress = pd.DataFrame(columns=['subject_nr'])
 optMinDfMeal = pd.DataFrame(columns=['subject_nr'])
 optMinDfRoom = pd.DataFrame(columns=['subject_nr'])
 
+no_learning_df = pd.DataFrame(columns=['subject_nr'])
+no_act_strat_indep_df = pd.DataFrame(columns=['subject_nr'])
+act_indep_strat_indep_df = pd.DataFrame(columns=['subject_nr'])
+
 bic_stress = pd.DataFrame(columns=['subject_nr']) 
 bic_meal = pd.DataFrame(columns=['subject_nr'])
 bic_room = pd.DataFrame(columns=['subject_nr'])
@@ -271,17 +274,15 @@ for fileName in csvList:
     actorsRoom = ['r2', 'r1']
     # stress block
     resultStressNoLearning = opt.minimize(fun=log_likelihood_no_learning, x0=xZero,
-                                          args=(focused_df.loc[focused_df['actor'].isin(actorsStress)], 'dist'),
-                                          bounds=bnds)
+                                          args=(focused_df.loc[focused_df['actor'].isin(actorsStress)], 'dist'),bounds=bnds)
     resultStressNoActorOneArmB = opt.minimize(fun=log_likelihood_no_actor, x0=xZero,
-                                              args=(
-                                                  focused_df.loc[focused_df['actor'].isin(actorsStress)], 'dist', True),
+                                              args=(focused_df.loc[focused_df['actor'].isin(actorsStress)], 'dist', True),
                                               bounds=bnds)
     resultStressActorDepOneArmB = opt.minimize(fun=log_likelihood_actor_dep, x0=xZero,
                                                args=(
                                                    focused_df.loc[focused_df['actor'].isin(actorsStress)], 'dist', 's1',
                                                    True), bounds=bnds)
-    resultStressActorIndOneArmB = opt.minimize(fun=log_likelihood_actor_ind_one_arm_b, x0=xZero,
+    resultStressActorIndOneArmB = opt.minimize(fun=log_likelihood_actor_ind, x0=xZero,
                                                args=(
                                                    focused_df.loc[focused_df['actor'].isin(actorsStress)], 'dist', 's1',
                                                    True), bounds=bnds)
@@ -294,7 +295,7 @@ for fileName in csvList:
                                                args=(
                                                    focused_df.loc[focused_df['actor'].isin(actorsStress)], 'dist', 's1',
                                                    False), bounds=bnds)
-    resultStressActorIndTwoArmB = opt.minimize(fun=log_likelihood_actor_ind_one_arm_b, x0=xZero,
+    resultStressActorIndTwoArmB = opt.minimize(fun=log_likelihood_actor_ind, x0=xZero,
                                                args=(
                                                    focused_df.loc[focused_df['actor'].isin(actorsStress)], 'dist', 's1',
                                                    False), bounds=bnds)
@@ -310,7 +311,7 @@ for fileName in csvList:
                                              args=(
                                                  focused_df.loc[focused_df['actor'].isin(actorsMeal)], 'sweet', 'm1',
                                                  True), bounds=bnds)
-    resultMealActorIndOneArmB = opt.minimize(fun=log_likelihood_actor_ind_one_arm_b, x0=xZero,
+    resultMealActorIndOneArmB = opt.minimize(fun=log_likelihood_actor_ind, x0=xZero,
                                              args=(
                                                  focused_df.loc[focused_df['actor'].isin(actorsMeal)], 'sweet', 'm1',
                                                  True), bounds=bnds)
@@ -323,7 +324,7 @@ for fileName in csvList:
                                              args=(
                                                  focused_df.loc[focused_df['actor'].isin(actorsMeal)], 'sweet', 'm1',
                                                  False), bounds=bnds)
-    resultMealActorIndTwoArmB = opt.minimize(fun=log_likelihood_actor_ind_one_arm_b, x0=xZero,
+    resultMealActorIndTwoArmB = opt.minimize(fun=log_likelihood_actor_ind, x0=xZero,
                                              args=(
                                                  focused_df.loc[focused_df['actor'].isin(actorsMeal)], 'sweet', 'm1',
                                                  False), bounds=bnds)
@@ -333,40 +334,30 @@ for fileName in csvList:
                                         args=(focused_df.loc[focused_df['actor'].isin(actorsRoom)], 'wood_closet'),
                                         bounds=bnds)
     resultRoomNoActorOneArmB = opt.minimize(fun=log_likelihood_no_actor, x0=xZero,
-                                            args=(
-                                                focused_df.loc[focused_df['actor'].isin(actorsRoom)], 'wood_closet',
+                                            args=(focused_df.loc[focused_df['actor'].isin(actorsRoom)], 'wood_closet',
                                                 True),
                                             bounds=bnds)
     resultRoomActorDepOneArmB = opt.minimize(fun=log_likelihood_actor_dep, x0=xZero,
-                                             args=(
-                                                 focused_df.loc[focused_df['actor'].isin(actorsRoom)], 'wood_closet',
-                                                 'r1',
-                                                 True), bounds=bnds)
-    resultRoomActorIndOneArmB = opt.minimize(fun=log_likelihood_actor_ind_one_arm_b, x0=xZero,
-                                             args=(
-                                                 focused_df.loc[focused_df['actor'].isin(actorsRoom)], 'wood_closet',
-                                                 'r1',
-                                                 True), bounds=bnds)
+                                             args=(focused_df.loc[focused_df['actor'].isin(actorsRoom)], 'wood_closet',
+                                                 'r1', True), bounds=bnds)
+    resultRoomActorIndOneArmB = opt.minimize(fun=log_likelihood_actor_ind, x0=xZero,
+                                             args=(focused_df.loc[focused_df['actor'].isin(actorsRoom)], 'wood_closet',
+                                                 'r1', True), bounds=bnds)
     resultRoomNoActorTwoArmB = opt.minimize(fun=log_likelihood_no_actor, x0=xZero,
-                                            args=(
-                                                focused_df.loc[focused_df['actor'].isin(actorsRoom)], 'wood_closet',
+                                            args=(focused_df.loc[focused_df['actor'].isin(actorsRoom)], 'wood_closet',
                                                 False),
                                             bounds=bnds)
     resultRoomActorDepTwoArmB = opt.minimize(fun=log_likelihood_actor_dep, x0=xZero,
-                                             args=(
-                                                 focused_df.loc[focused_df['actor'].isin(actorsRoom)], 'wood_closet',
-                                                 'r1',
-                                                 False), bounds=bnds)
-    resultRoomActorIndTwoArmB = opt.minimize(fun=log_likelihood_actor_ind_one_arm_b, x0=xZero,
-                                             args=(
-                                                 focused_df.loc[focused_df['actor'].isin(actorsRoom)], 'wood_closet',
-                                                 'r1',
-                                                 False), bounds=bnds)
+                                             args=(focused_df.loc[focused_df['actor'].isin(actorsRoom)], 'wood_closet',
+                                                 'r1', False), bounds=bnds)
+    resultRoomActorIndTwoArmB = opt.minimize(fun=log_likelihood_actor_ind, x0=xZero,
+                                             args=(focused_df.loc[focused_df['actor'].isin(actorsRoom)], 'wood_closet',
+                                                 'r1',False), bounds=bnds)
 
     num_of_trials_stress = focused_df.loc[focused_df['actor'].isin(actorsStress)].shape[0]
     optMinDfStress = optMinDfStress.append(
         {'subject_nr': focused_df.subject_nr[1],
-         'q_d_no_learn': resultStressNoLearning.x[0], 'q_r_no_learn': 1 - resultStressNoLearning.x[0],
+         'q_2_no_learn': resultStressNoLearning.x[0], 'q_1_no_learn': 1 - resultStressNoLearning.x[0],
          'beta_no_learn': resultStressNoLearning.x[1], 'll_no_learn': resultStressNoLearning.fun,
          'sAlpha_act_dep': resultStressActorDepOneArmB.x[0], 'sBeta_act_dep': resultStressActorDepOneArmB.x[1],
          'sLL_act_dep': resultStressActorDepOneArmB.fun,
@@ -392,7 +383,7 @@ for fileName in csvList:
     num_of_trials_meal = focused_df.loc[focused_df['actor'].isin(actorsMeal)].shape[0]
     optMinDfMeal = optMinDfMeal.append(
         {'subject_nr': focused_df.subject_nr[1],
-         'q_d_no_learn': resultMealNoLearning.x[0], 'q_r_no_learn': 1 - resultMealNoLearning.x[0],
+         'q_2_no_learn': resultMealNoLearning.x[0], 'q_1_no_learn': 1 - resultMealNoLearning.x[0],
          'beta_no_learn': resultMealNoLearning.x[1], 'll_no_learn': resultMealNoLearning.fun,
          'mAlpha_act_dep': resultMealActorDepOneArmB.x[0], 'mBeta_act_dep': resultMealActorDepOneArmB.x[1],
          'mLL_act_dep': resultMealActorDepOneArmB.fun,
@@ -405,7 +396,7 @@ for fileName in csvList:
          'mP_act_ind_model_acc': np.exp(-resultMealActorIndOneArmB.fun / num_of_trials_meal),
          'mAlpha_act_dep_2A': resultMealActorDepTwoArmB.x[0], 'mBeta_act_dep_2A': resultMealActorDepTwoArmB.x[1],
          'mLL_act_dep_2A': resultMealActorDepTwoArmB.fun,
-         'mP_act_dep_model_acc_2A': np.exp(-resultStressActorDepTwoArmB.fun / num_of_trials_meal),
+         'mP_act_dep_model_acc_2A': np.exp(-resultMealActorDepTwoArmB.fun / num_of_trials_meal),
          'mAlpha_no_act_2A': resultMealNoActorTwoArmB.x[0], 'mBeta_no_act_2A': resultMealNoActorTwoArmB.x[1],
          'mLL_no_act_2A': resultMealNoActorTwoArmB.fun,
          'mP_no_act_model_acc_2A': np.exp(-resultMealNoActorTwoArmB.fun / num_of_trials_meal),
@@ -418,32 +409,26 @@ for fileName in csvList:
     num_of_trials_room = focused_df.loc[focused_df['actor'].isin(actorsRoom)].shape[0]
     optMinDfRoom = optMinDfRoom.append(
         {'subject_nr': focused_df.subject_nr[1],
-         'q_d_no_learn': resultMealNoLearning.x[0], 'q_r_no_learn': 1 - resultMealNoLearning.x[0],
-         'beta_no_learn': resultMealNoLearning.x[1], 'll_no_learn': resultMealNoLearning.fun,
-         'rAlpha_act_dep': resultMealActorDepOneArmB.x[0], 'rBeta_act_dep': resultMealActorDepOneArmB.x[1],
-         'rLL_act_dep': resultMealActorDepOneArmB.fun,
-         'rP_act_dep_model_acc': np.exp(
-             -resultMealActorDepOneArmB.fun / num_of_trials_room),
-         'rAlpha_no_act': resultMealNoActorOneArmB.x[0], 'rBeta_no_act': resultMealNoActorOneArmB.x[1],
-         'rLL_no_act': resultMealNoActorOneArmB.fun,
-         'rP_no_act_model_acc': np.exp(
-             -resultMealNoActorOneArmB.fun / num_of_trials_room),
-         'rAlpha_act_ind': resultMealActorIndOneArmB.x[0], 'rBeta_act_ind': resultMealActorIndOneArmB.x[1],
-         'rLL_act_ind': resultMealActorIndOneArmB.fun,
-         'rP_act_ind_model_acc': np.exp(
-             -resultMealActorIndOneArmB.fun / num_of_trials_room),
-         'rAlpha_act_dep_2A': resultMealActorDepTwoArmB.x[0], 'rBeta_act_dep_2A': resultMealActorDepTwoArmB.x[1],
-         'rLL_act_dep_2A': resultMealActorDepTwoArmB.fun,
-         'rP_act_dep_model_acc_2A': np.exp(
-             -resultStressActorDepTwoArmB.fun / num_of_trials_room),
-         'rAlpha_no_act_2A': resultMealNoActorTwoArmB.x[0], 'rBeta_no_act_2A': resultMealNoActorTwoArmB.x[1],
-         'rLL_no_act_2A': resultMealNoActorTwoArmB.fun,
-         'rP_no_act_model_acc_2A': np.exp(
-             -resultMealNoActorTwoArmB.fun / num_of_trials_room),
-         'rAlpha_act_ind_2A': resultMealActorIndTwoArmB.x[0], 'rBeta_act_ind_2A': resultMealActorIndTwoArmB.x[1],
-         'rLL_act_ind_2A': resultMealActorIndTwoArmB.fun,
-         'rP_act_ind_model_acc_2A': np.exp(
-             -resultMealActorIndTwoArmB.fun / num_of_trials_room)},
+         'q_2_no_learn': resultRoomNoLearning.x[0], 'q_1_no_learn': 1 - resultRoomNoLearning.x[0],
+         'beta_no_learn': resultRoomNoLearning.x[1], 'll_no_learn': resultRoomNoLearning.fun,
+         'rAlpha_act_dep': resultRoomActorDepOneArmB.x[0], 'rBeta_act_dep': resultRoomActorDepOneArmB.x[1],
+         'rLL_act_dep': resultRoomActorDepOneArmB.fun,
+         'rP_act_dep_model_acc': np.exp(-resultRoomActorDepOneArmB.fun / num_of_trials_room),
+         'rAlpha_no_act': resultRoomNoActorOneArmB.x[0], 'rBeta_no_act': resultRoomNoActorOneArmB.x[1],
+         'rLL_no_act': resultRoomNoActorOneArmB.fun,
+         'rP_no_act_model_acc': np.exp(-resultRoomNoActorOneArmB.fun / num_of_trials_room),
+         'rAlpha_act_ind': resultRoomActorIndOneArmB.x[0], 'rBeta_act_ind': resultRoomActorIndOneArmB.x[1],
+         'rLL_act_ind': resultRoomActorIndOneArmB.fun,
+         'rP_act_ind_model_acc': np.exp(-resultRoomActorIndOneArmB.fun / num_of_trials_room),
+         'rAlpha_act_dep_2A': resultRoomActorDepTwoArmB.x[0], 'rBeta_act_dep_2A': resultRoomActorDepTwoArmB.x[1],
+         'rLL_act_dep_2A': resultRoomActorDepTwoArmB.fun,
+         'rP_act_dep_model_acc_2A': np.exp(-resultRoomActorDepTwoArmB.fun / num_of_trials_room),
+         'rAlpha_no_act_2A': resultRoomNoActorTwoArmB.x[0], 'rBeta_no_act_2A': resultRoomNoActorTwoArmB.x[1],
+         'rLL_no_act_2A': resultRoomNoActorTwoArmB.fun,
+         'rP_no_act_model_acc_2A': np.exp(-resultRoomNoActorTwoArmB.fun / num_of_trials_room),
+         'rAlpha_act_ind_2A': resultRoomActorIndTwoArmB.x[0], 'rBeta_act_ind_2A': resultRoomActorIndTwoArmB.x[1],
+         'rLL_act_ind_2A': resultRoomActorIndTwoArmB.fun,
+         'rP_act_ind_model_acc_2A': np.exp(-resultRoomActorIndTwoArmB.fun / num_of_trials_room)},
         ignore_index=True, sort=False)
 
     # aggregate BIC scores
@@ -492,27 +477,77 @@ for fileName in csvList:
                                     resultRoomActorIndOneArmB.fun, 40, 2),
                                 'deltaBICInd2AB_Dep1AB': bic(resultRoomActorIndTwoArmB.fun, 40, 2) - bic(
                                     resultRoomActorDepOneArmB.fun, 40, 2)}, ignore_index=True, sort=False)
+    #aggregate for model with no learning, only sticking to one strategy
+    no_learning_df = no_learning_df.append({'subject_nr': focused_df.subject_nr[1],
+                                            'q_2_stress': resultStressNoLearning.x[0],
+                                            'q_1_stress': 1 - resultStressNoLearning.x[0],
+                                            'beta_stress': resultStressNoLearning.x[1],
+                                            'll_stress': resultStressNoLearning.fun,
+                                            'p_stress': np.exp(-resultStressNoLearning.fun / num_of_trials_stress),
+                                            'q_2_meal': resultMealNoLearning.x[0],
+                                            'q_1_meal': 1 - resultMealNoLearning.x[0],
+                                            'beta_meal': resultMealNoLearning.x[1],
+                                            'll_meal': resultMealNoLearning.fun,
+                                            'p_meal': np.exp(-resultMealNoLearning.fun / num_of_trials_meal),
+                                            'q_2_room': resultRoomNoLearning.x[0],
+                                            'q_1_room': 1 - resultRoomNoLearning.x[0],
+                                            'beta_room': resultRoomNoLearning.x[1],
+                                            'll_room': resultRoomNoLearning.fun,
+                                            'p_room': np.exp(-resultRoomNoLearning.fun / num_of_trials_room),
+                                            'BIC_stress': bic(resultStressNoLearning.fun, 40, 2),
+                                            'BIC_meal': bic(resultMealNoLearning.fun, 40, 2),
+                                            'BIC_room': bic(resultRoomNoLearning.fun, 40, 2)},ignore_index=True, sort=False)
+    #aggregate for model with actor indifference and strategies independent model
+    no_act_strat_indep_df = no_act_strat_indep_df.append({'subject_nr': focused_df.subject_nr[1],
+                                        'alpha_stress': resultStressNoActorTwoArmB.x[0],
+                                        'beta_stress': resultStressNoActorTwoArmB.x[1],
+                                        'll_stress': resultStressNoActorTwoArmB.fun,
+                                        'p_stress': np.exp(-resultStressNoActorTwoArmB.fun / num_of_trials_stress),
+                                        'alpha_meal': resultMealNoActorTwoArmB.x[0],
+                                        'beta_meal': resultMealNoActorTwoArmB.x[1],
+                                        'll_meal': resultMealNoActorTwoArmB.fun,
+                                        'p_meal': np.exp(-resultMealNoActorTwoArmB.fun / num_of_trials_meal),
+                                        'alpha_room': resultRoomNoActorTwoArmB.x[0],
+                                        'beta_room': resultRoomNoActorTwoArmB.x[1],
+                                        'll_room': resultRoomNoActorTwoArmB.fun,
+                                        'p_room': np.exp(-resultRoomNoActorTwoArmB.fun / num_of_trials_room),
+                                        'BIC_stress': bic(resultStressNoActorTwoArmB.fun, 40, 2),
+                                        'BIC_meal': bic(resultMealNoActorTwoArmB.fun, 40, 2),
+                                        'BIC_room': bic(resultRoomNoActorTwoArmB.fun, 40, 2)},ignore_index=True, sort=False)
+    #aggregate for model with actor independent, strategies independent learning
+    act_indep_strat_indep_df = act_indep_strat_indep_df.append({'subject_nr': focused_df.subject_nr[1],
+                                                                'alpha_stress': resultStressActorIndTwoArmB.x[0],
+                                                                'beta_stress': resultStressActorIndTwoArmB.x[1],
+                                                                'll_stress': resultStressActorIndTwoArmB.fun,
+                                                                'p_stress': np.exp(-resultStressActorIndTwoArmB.fun / num_of_trials_stress),
+                                                                'alpha_meal': resultMealActorIndTwoArmB.x[0],
+                                                                'beta_meal': resultMealActorIndTwoArmB.x[1],
+                                                                'll_meal': resultMealActorIndTwoArmB.fun,
+                                                                'p_meal': np.exp(-resultMealActorIndTwoArmB.fun / num_of_trials_meal),
+                                                                'alpha_room': resultRoomActorIndTwoArmB.x[0],
+                                                                'beta_room': resultRoomActorIndTwoArmB.x[1],
+                                                                'll_room': resultRoomActorIndTwoArmB.fun,
+                                                                'p_room': np.exp(-resultRoomActorIndTwoArmB.fun / num_of_trials_room),
+                                                                'BIC_stress': bic(resultStressActorIndTwoArmB.fun, 40, 2),
+                                                                'BIC_meal': bic(resultMealActorIndTwoArmB.fun, 40, 2),
+                                                                'BIC_room': bic(resultRoomActorIndTwoArmB.fun, 40, 2)},
+                                                               ignore_index=True, sort=False)
     j = j + 1
-subset_bic_stress = bic_stress[(bic_stress['BIC_act_ind'] < 60) & (bic_stress['BIC_act_dep'] < 60)]
-subset_bic_meal = bic_meal[(bic_meal['BIC_act_ind'] < 60) & (bic_meal['BIC_act_dep'] < 60)]
-subset_bic_room = bic_room[(bic_room['BIC_act_ind'] < 60) & (bic_room['BIC_act_dep'] < 60)]
-
-# t test to compare BICs, see if there is a significant difference between the means of two groups: act independent and actor ind
-s_t_test_result = stats.ttest_ind(subset_bic_stress['BIC_act_ind'], subset_bic_stress['BIC_act_dep'])
-print("stress act ind vs act dep {} :".format(s_t_test_result))
-m_t_test_result = stats.ttest_ind(subset_bic_meal['BIC_act_ind'], subset_bic_meal['BIC_act_dep'])
-print("meal act ind vs act dep {} :".format(m_t_test_result))
-r_t_test_result = stats.ttest_ind(subset_bic_room['BIC_act_ind'], subset_bic_room['BIC_act_dep'])
-print("room act ind vs act dep {} :".format(m_t_test_result))
-s_t_test_result = stats.ttest_ind(subset_bic_stress['BIC_act_ind_2A'], subset_bic_stress['BIC_act_dep_2A'])
-print("stress act ind vs act dep 2armB{} :".format(s_t_test_result))
-m_t_test_result = stats.ttest_ind(subset_bic_meal['BIC_act_ind_2A'], subset_bic_meal['BIC_act_dep_2A'])
-print("meal act ind vs act dep 2armB{} :".format(m_t_test_result))
-r_t_test_result = stats.ttest_ind(subset_bic_room['BIC_act_ind_2A'], subset_bic_room['BIC_act_dep_2A'])
-print("room act ind vs act dep 2armB{} :".format(r_t_test_result))
-print(subset_bic_stress)
-print(subset_bic_meal)
-print(subset_bic_room)
+subset_no_learning = no_act_strat_indep_df[(no_act_strat_indep_df['BIC_stress'] < 60) | (no_act_strat_indep_df['BIC_meal'] < 60) | (no_act_strat_indep_df['BIC_room'] < 60)]
+subset_no_act_strat_indep = no_act_strat_indep_df[(no_act_strat_indep_df['BIC_stress'] < 60) & (no_act_strat_indep_df['BIC_meal'] < 60) | (act_indep_strat_indep_df['BIC_room'] < 60)]
+subset_act_indep_strat_indep = act_indep_strat_indep_df[(act_indep_strat_indep_df['BIC_stress'] < 60) | (act_indep_strat_indep_df['BIC_meal'] < 60) | (act_indep_strat_indep_df['BIC_room'] < 60)]
+subset_bic_stress = bic_stress[(bic_stress['BIC_no_learn'] < 60) | (bic_stress['BIC_no_act'] < 60) | (
+            bic_stress['BIC_act_dep'] < 60) | (bic_stress['BIC_act_ind'] < 60) | (bic_stress['BIC_no_act_2A'] < 60) |
+                               (bic_stress['BIC_act_dep_2A'] < 60) | (bic_stress['BIC_act_ind_2A'] < 60)]
+subset_bic_meal = bic_meal[(bic_meal['BIC_no_learn'] < 60) | (bic_meal['BIC_no_act'] < 60) | (
+            bic_meal['BIC_act_dep'] < 60) | (bic_meal['BIC_act_ind'] < 60) | (bic_meal['BIC_no_act_2A'] < 60) |
+                               (bic_meal['BIC_act_dep_2A'] < 60) | (bic_meal['BIC_act_ind_2A'] < 60)]
+subset_bic_room = bic_room[(bic_room['BIC_no_learn'] < 60) | (bic_room['BIC_no_act'] < 60) | (
+            bic_room['BIC_act_dep'] < 60) | (bic_room['BIC_act_ind'] < 60) | (bic_room['BIC_no_act_2A'] < 60) |
+                               (bic_room['BIC_act_dep_2A'] < 60) | (bic_room['BIC_act_ind_2A'] < 60)]
+# t test to compare BICs, see if there is a significant difference between the means of two paired groups
+#t_test_result = stats.ttest_rel(no_act_strat_indep_df['BIC_stress'], act_indep_strat_indep_df['BIC_stress'])
+#print("act_indep_strat_indep vs no_act_strat_indep in bic stress{} :".format(t_test_result))
 
 #save params and scores to csv
 optMinDfStress.to_csv(plotsFolderName + '/optResultStress.csv', index=False)
@@ -522,6 +557,18 @@ optMinDfRoom.to_csv(plotsFolderName + '/optResultRoom.csv', index=False)
 bic_stress.to_csv(plotsFolderName + '/BICStress.csv', index=False)
 bic_meal.to_csv(plotsFolderName + '/BICMeal.csv', index=False)
 bic_room.to_csv(plotsFolderName + '/BICRoom.csv', index=False)
+
+subset_bic_stress.to_csv(plotsFolderName + '/sub_BICStress.csv', index=False)
+subset_bic_meal.to_csv(plotsFolderName + '/sub_BICMeal.csv', index=False)
+subset_bic_room.to_csv(plotsFolderName + '/sub_BICRoom.csv', index=False)
+
+no_learning_df.to_csv(plotsFolderName + '/no_learning_model.csv', index=False)
+no_act_strat_indep_df.to_csv(plotsFolderName + '/no_act_strat_indep_model.csv', index=False)
+act_indep_strat_indep_df.to_csv(plotsFolderName + '/act_indep_strat_indep_model.csv', index=False)
+
+subset_act_indep_strat_indep.to_csv(plotsFolderName + '/sub_act_indep_strat_indep.csv', index=False)
+subset_no_act_strat_indep.to_csv(plotsFolderName + '/sub_no_act_strat_indep.csv', index=False)
+subset_no_learning.to_csv(plotsFolderName + '/sub_no_learning.csv', index=False)
 
 alpha_to_plot = [optMinDfStress.sLL_act_dep, optMinDfStress.sLL_act_ind, optMinDfStress.sLL_no_act]
 beta_to_plot = [optMinDfStress.sBeta_act_dep, optMinDfStress.sBeta_act_ind, optMinDfStress.sBeta_no_act]
@@ -533,11 +580,11 @@ box_plot_png(ll_to_plot, ['LL stress act dep', 'LL stress act ind', 'LL stress n
 
 # plot alphas relation
 # people
-# ax1 = optMinDf.plot(kind='scatter', x='sAlphaD', y='sAlphaR', color='red')
+# ax1 = optMinDfStress.plot(kind='scatter', x='sAlphaD', y='sAlphaR', color='red')
 # add_identity(ax1)
 # ax1.set_xlabel('\u03B1 distraction')
 # ax1.set_ylabel('\u03B1 reappraisal')
-# optMinDf[['sAlphaD','sAlphaR','participantID']].apply(lambda row: ax1.text(*row),axis=1);
+# optMinDfStress[['sAlphaD','sAlphaR','participantID']].apply(lambda row: ax1.text(*row),axis=1);
 # plt.savefig(plotsFolderName + '/stress alphas.png', dpi=300)
 # plt.clf()
 
@@ -568,30 +615,30 @@ box_plot_png(ll_to_plot, ['LL stress act dep', 'LL stress act ind', 'LL stress n
 # plt.clf()
 
 # ind diff comparison
-ax_bic = subset_bic_stress.plot.scatter(x='BIC_act_dep', y='BIC_no_act', colormap='winter')
-# add_identity(ax_bic)
-line = Line2D(xdata=[0, 70], ydata=[0, 70], color="red")
-ax_bic.add_line(line)
-ax_bic.set_xlabel('BIC sLL_act_dep')
-ax_bic.set_ylabel('BIC sLL_no_act')
-plt.savefig(plotsFolderName + '/ind diff comparison BIC dep vs no act.png', dpi=300)
-plt.clf()
+# ax_bic = subset_bic_stress.plot.scatter(x='BIC_act_dep', y='BIC_no_act', colormap='winter')
+# # add_identity(ax_bic)
+# line = Line2D(xdata=[0, 70], ydata=[0, 70], color="red")
+# ax_bic.add_line(line)
+# ax_bic.set_xlabel('BIC sLL_act_dep')
+# ax_bic.set_ylabel('BIC sLL_no_act')
+# plt.savefig(plotsFolderName + '/ind diff comparison BIC dep vs no act.png', dpi=300)
+# plt.clf()
 
-ax_bic = subset_bic_stress.plot.scatter(x='BIC_act_ind', y='BIC_no_act', colormap='winter')
-# add_identity(ax_bic)
-line = Line2D(xdata=[0, 70], ydata=[0, 70], color="red")
-ax_bic.add_line(line)
-ax_bic.set_xlabel('BIC sLL_act_ind')
-ax_bic.set_ylabel('BIC sLL_no_act')
-plt.savefig(plotsFolderName + '/ind diff comparison BIC ind vs no act.png', dpi=300)
-
-ax_bic = subset_bic_stress.plot.scatter(x='BIC_act_ind', y='BIC_act_dep', colormap='winter')
-# add_identity(ax_bic)
-line = Line2D(xdata=[0, 70], ydata=[0, 70], color="red")
-ax_bic.add_line(line)
-ax_bic.set_xlabel('BIC sLL_act_ind')
-ax_bic.set_ylabel('BIC sLL_act_dep')
-plt.savefig(plotsFolderName + '/ind diff comparison BIC ind vs act dep.png', dpi=300)
+# ax_bic = subset_bic_stress.plot.scatter(x='BIC_act_ind', y='BIC_no_act', colormap='winter')
+# # add_identity(ax_bic)
+# line = Line2D(xdata=[0, 70], ydata=[0, 70], color="red")
+# ax_bic.add_line(line)
+# ax_bic.set_xlabel('BIC sLL_act_ind')
+# ax_bic.set_ylabel('BIC sLL_no_act')
+# plt.savefig(plotsFolderName + '/ind diff comparison BIC ind vs no act.png', dpi=300)
+#
+# ax_bic = subset_bic_stress.plot.scatter(x='BIC_act_ind', y='BIC_act_dep', colormap='winter')
+# # add_identity(ax_bic)
+# line = Line2D(xdata=[0, 70], ydata=[0, 70], color="red")
+# ax_bic.add_line(line)
+# ax_bic.set_xlabel('BIC sLL_act_ind')
+# ax_bic.set_ylabel('BIC sLL_act_dep')
+# plt.savefig(plotsFolderName + '/ind diff comparison BIC ind vs act dep.png', dpi=300)
 
 ax_alpha = optMinDfStress.plot.scatter(x='sAlpha_act_dep',
                                        y='sAlpha_act_ind')  # , c='isActIndVsActDepBetter', colormap='winter')

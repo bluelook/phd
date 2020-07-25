@@ -1,16 +1,17 @@
-install.packages(c("ggplot2", "tidyverse", "gridExtra", "purrr","plotly"))
+#install.packages(c("ggplot2", "tidyverse", "gridExtra", "purrr","plotly"))
 #ggthemes, "extrafont", "cowplot", "grid", ggforce, shiny, ggridges, ggrepel, reshape2
 #devtools::install_github("thomasp85/patchwork")
 library(ggplot2)
 library(tidyverse)
-library(purrr)
 library(gridExtra)
 library(gtools)
 library(plot3D)
 library(readxl)
 library(ggpval)
 library(ggpubr)
-
+library(BayesFactor)
+library(rstatix)
+library(pwr)
 
 rm(list = ls())
 dev.off() #clear all
@@ -19,9 +20,10 @@ setwd('./data/behavioral')
 # list the files in a directory, each file represents a subject
 file_names <- list.files(pattern = ".csv$")
 num_subjects <- length(file_names)
-subj_data <- read_xlsx("responses.xlsx", sheet = "all traversed")
+subj_data <- read_xlsx("responses_assignment.xlsx", sheet = "all traversed")
+#subj_data <- read_xlsx("responses.xlsx", sheet = "all traversed")
 
-#read all the files in the directory into one data frame
+###################### read all the files in the directory into one data frame and pre-process ###########
 full_df <-
   do.call(smartbind,
           lapply(
@@ -67,6 +69,65 @@ no_learning_model <- subset(no_learning_model, subject_nr %in% act_indep_strat_i
 bic_stress$subject_nr <- factor(bic_stress$subject_nr)
 bic_meal$subject_nr <- factor(bic_meal$subject_nr)
 bic_room$subject_nr <- factor(bic_room$subject_nr)
+#keep only the needed data and add numeric data about choices(dist,sweet,wood = 1. reap, salty, blue = 0)
+full_df_filtered <- subset(full_df, subject_nr %in% act_indep_strat_indep_model$subject_nr)
+
+extracted_df <- select(full_df_filtered, subject_nr, actor, correct, preferred)
+
+
+#for each row convert choices to numeric values
+for (i in 1:nrow(extracted_df)) {
+  #if the choice taken was incorrect
+  if (extracted_df$correct[i] == 0) {
+    if (extracted_df$preferred[i] == 'dist') {
+      extracted_df$chosen[i] <- 'reap'
+      extracted_df$chosen_numeric[i] <- 0
+      extracted_df$preferred_numeric[i] <- 1
+    }
+    else if (extracted_df$preferred[i] == 'reap') {
+      extracted_df$chosen[i] <- 'dist'
+      extracted_df$chosen_numeric[i] <- 1
+      extracted_df$preferred_numeric[i] <- 0
+    }
+    else if (extracted_df$preferred[i] == 'sweet') {
+      extracted_df$chosen[i] <- 'salty'
+      extracted_df$chosen_numeric[i] <- 0
+      extracted_df$preferred_numeric[i] <- 1
+    }
+    else if (extracted_df$preferred[i] == 'salty') {
+      extracted_df$chosen[i] <- 'sweet'
+      extracted_df$chosen_numeric[i] <- 1
+      extracted_df$preferred_numeric[i] <- 1
+    }
+    else if (extracted_df$preferred[i] == 'blue_closet') {
+      extracted_df$chosen[i] <- 'wood_closet'
+      extracted_df$chosen_numeric[i] <- 1
+      extracted_df$preferred_numeric[i] <- 0
+    }
+    else if (extracted_df$preferred[i] == 'wood_closet') {
+      extracted_df$chosen[i] <- 'blue_closet'
+      extracted_df$chosen_numeric[i] <- 0
+      extracted_df$preferred_numeric[i] <- 1
+    }
+  } else{
+    #the step taken was correct
+    extracted_df$chosen[i] = extracted_df$preferred[i]
+    if (extracted_df$preferred[i] == 'reap' |
+        extracted_df$preferred[i] == 'salty' |
+        extracted_df$preferred[i] == 'blue_closet') {
+      extracted_df$chosen_numeric[i] <- 0
+      extracted_df$preferred_numeric[i] <- 0
+    }
+    else{
+      extracted_df$chosen_numeric[i] <- 1
+      extracted_df$preferred_numeric[i] <- 1
+    }
+  }
+}
+
+extracted_df <- extracted_df %>%  mutate(chosen_fixed = if_else(grepl('1', actor), 1 - chosen_numeric, chosen_numeric))
+extracted_df_indexed <- extracted_df %>% group_by(subject_nr,actor) %>% mutate(id = row_number())
+
 
 ###################### BAR plots delta bic #########################
 #delta bic stress
@@ -593,64 +654,7 @@ b_r_s <- ggplot(data = act_indep_strat_indep_model_mutated, aes(x = beta_room, y
 grid.arrange(b_m_s, b_m_r, b_r_s, ncol=2, nrow=2)
 
 ###################### descriptive statistics ###############
-#keep only the needed data and add numeric data about choices(dist,sweet,wood = 1. reap, salty, blue = 0)
-full_df_filtered <- subset(full_df, subject_nr %in% act_indep_strat_indep_model$subject_nr)
 
-extracted_df <- select(full_df_filtered, subject_nr, actor, correct, preferred)
-
-
-#for each row convert choices to numeric values
-for (i in 1:nrow(extracted_df)) {
-  #if the choice taken was incorrect
-  if (extracted_df$correct[i] == 0) {
-    if (extracted_df$preferred[i] == 'dist') {
-      extracted_df$chosen[i] <- 'reap'
-      extracted_df$chosen_numeric[i] <- 0
-      extracted_df$preferred_numeric[i] <- 1
-    }
-    else if (extracted_df$preferred[i] == 'reap') {
-      extracted_df$chosen[i] <- 'dist'
-      extracted_df$chosen_numeric[i] <- 1
-      extracted_df$preferred_numeric[i] <- 0
-    }
-    else if (extracted_df$preferred[i] == 'sweet') {
-      extracted_df$chosen[i] <- 'salty'
-      extracted_df$chosen_numeric[i] <- 0
-      extracted_df$preferred_numeric[i] <- 1
-    }
-    else if (extracted_df$preferred[i] == 'salty') {
-      extracted_df$chosen[i] <- 'sweet'
-      extracted_df$chosen_numeric[i] <- 1
-      extracted_df$preferred_numeric[i] <- 1
-    }
-    else if (extracted_df$preferred[i] == 'blue_closet') {
-      extracted_df$chosen[i] <- 'wood_closet'
-      extracted_df$chosen_numeric[i] <- 1
-      extracted_df$preferred_numeric[i] <- 0
-    }
-    else if (extracted_df$preferred[i] == 'wood_closet') {
-      extracted_df$chosen[i] <- 'blue_closet'
-      extracted_df$chosen_numeric[i] <- 0
-      extracted_df$preferred_numeric[i] <- 1
-    }
-  } else{
-    #the step taken was correct
-    extracted_df$chosen[i] = extracted_df$preferred[i]
-    if (extracted_df$preferred[i] == 'reap' |
-        extracted_df$preferred[i] == 'salty' |
-        extracted_df$preferred[i] == 'blue_closet') {
-      extracted_df$chosen_numeric[i] <- 0
-      extracted_df$preferred_numeric[i] <- 0
-    }
-    else{
-      extracted_df$chosen_numeric[i] <- 1
-      extracted_df$preferred_numeric[i] <- 1
-    }
-  }
-}
-
-extracted_df <- extracted_df %>%  mutate(chosen_fixed = if_else(grepl('1', actor), 1 - chosen_numeric, chosen_numeric))
-extracted_df_indexed <- extracted_df %>% group_by(subject_nr,actor) %>% mutate(id = row_number())
 #extracted_df <- extracted_df_indexed %>% filter(id>=10)
 #descriptive statistics
 #summary(extracted_df)
@@ -676,7 +680,7 @@ mean_chosen_all <-
   )
 #chosen_all <-
  # extracted_df %>% mutate(color = if_else(grepl('1', actor), "Condition 1", "Condition 2")) %>%
-t.test(extracted_df$chosen_numeric[extracted_df$actor=='r1'], extracted_df$chosen_numeric[extracted_df$actor=='m1'], paired = TRUE, alternative = "two.sided")
+#t.test(extracted_df$chosen_numeric[extracted_df$actor=='r1'], extracted_df$chosen_numeric[extracted_df$actor=='m1'], paired = TRUE, alternative = "two.sided")
 
 
 #BAR plot the mean by actor between subjects
@@ -808,7 +812,12 @@ subj_data_merged <-
 #M3 vs M2
 t.test(act_indep_strat_indep_model$BIC_stress, no_act_strat_indep_model$BIC_stress, paired = TRUE, alternative = "two.sided")
 #M3 vs M1
-t.test(act_indep_strat_indep_model$BIC_stress, no_learning_model$BIC_stress, paired = TRUE, alternative = "two.sided")
+tt2 <- t.test(act_indep_strat_indep_model$BIC_stress, no_learning_model$BIC_stress, paired = TRUE, alternative = "two.sided")
+#Bayes factor t test
+ttbf2 <- ttestBF(act_indep_strat_indep_model$BIC_stress, no_act_strat_indep_model$BIC_stress, paired = TRUE, alternative = "two.sided")
+#chains = posterior(ttbf2, iterations = 1000)
+#summary(chains)
+#plot(chains[,1:2])
 
 #food
 #M3 vs M2
@@ -822,10 +831,112 @@ t.test(act_indep_strat_indep_model$BIC_room, no_act_strat_indep_model$BIC_room, 
 #M3 vs M1
 t.test(act_indep_strat_indep_model$BIC_room, no_learning_model$BIC_room, paired = TRUE, alternative = "two.sided")
 
-#apha comparisons within M3 model - paired t tests two sided
-t.test(act_indep_strat_indep_model$alpha_stress, act_indep_strat_indep_model$alpha_meal, paired = TRUE, alternative = "two.sided")
-t.test(act_indep_strat_indep_model$alpha_stress, act_indep_strat_indep_model$alpha_room, paired = TRUE, alternative = "two.sided")
-t.test(act_indep_strat_indep_model$alpha_meal, act_indep_strat_indep_model$alpha_room, paired = TRUE, alternative = "two.sided")
+#convert the columns into long format
+all_data_l <- pivot_longer(all_data, alpha_meal: alpha_stress, names_to = "condition", values_to = "value")
+all_data_l %>% group_by(condition) %>% get_summary_stats(value, type = "mean_sd")
+#Create box plots of the learning rates per empathy level (high, low) colored by learning rate types
+ggboxplot(all_data_l, x = "empathy_level", y = "value", color="condition", short.panel.labs = FALSE)
+#find outliers
+outliers <- all_data_l %>% group_by(condition) %>%  identify_outliers(value)#there are outliers in 4 subjects
+#remove outliers
+all_data_l_f <- all_data_l[!(all_data_l$subject_nr %in% outliers$subject_nr),]
+#Create box plots of the learning rates per empathy level (high, low) colored by learning rate types after removing
+ggboxplot(all_data_l_f, x = "empathy_level", y = "value", color="condition", short.panel.labs = FALSE)
+ggboxplot(all_data_l_f, x = "condition", y = "value", color="condition", short.panel.labs = FALSE)
+
+#three levels (social, food and value-based) repeated measures analyses of variance (ANOVAs) 
+res.aov.n <- anova_test(
+  data = all_data_l_f, dv = value, wid = subject_nr,
+  within = c(condition)
+)
+get_anova_table(res.aov.n)
+# follow up pairwise comparisons t-test alpha
+pwc <- all_data_l_f %>%
+  pairwise_t_test(value ~ condition, paired = TRUE, p.adjust.method = "bonferroni",alternative = "two.sided") %>%
+  select(-df, -statistic) # Remove details
+
+#apha comparisons within M3(act_indep_strat_indep_model) model - paired t tests two sided
+#three levels (social, food and value-based) repeated measures analyses of variance (ANOVAs) 
+act_indep_strat_indep_model_long <- act_indep_strat_indep_model %>%
+  gather(key = "condition", value = "value", alpha_stress, alpha_meal, alpha_room) %>%
+  convert_as_factor(subject_nr, condition)
+
+b_act_indep_strat_indep_model_long <- act_indep_strat_indep_model %>%
+  gather(key = "condition", value = "b_value", beta_stress, beta_meal, beta_room) %>%
+  convert_as_factor(subject_nr, condition)
+
+
+res.aov <- anova_test(
+  data = act_indep_strat_indep_model_long, dv = value, wid = subject_nr,
+  within = c(condition)
+)
+get_anova_table(res.aov)
+
+res.aov_b <- anova_test(
+  data = b_act_indep_strat_indep_model_long, dv = b_value, wid = subject_nr,
+  within = c(condition)
+)
+get_anova_table(res.aov_b)
+
+# follow up pairwise comparisons t-test alpha
+pwc <- act_indep_strat_indep_model_long %>%
+  pairwise_t_test(value ~ condition, paired = TRUE, p.adjust.method = "bonferroni",alternative = "two.sided") %>%
+  select(-df, -statistic) # Remove details
+
+# follow up pairwise comparisons t-test beta
+pwc_b <- b_act_indep_strat_indep_model_long %>%
+  pairwise_t_test(b_value ~ condition, paired = TRUE, p.adjust.method = "bonferroni",alternative = "two.sided") %>%
+  select(-df, -statistic) # Remove details
+
+#power analysis
+pwr.t.test(n=15, power=0.9, d=NULL, sig.level=0.1868, type="paired", alternative="two.sided")
+pwr.t.test(n=15, power=0.9, d=NULL, sig.level=0.5922, type="paired", alternative="two.sided")
+pwr.t.test(n=15, power=0.9, d=NULL, sig.level=0.583, type="paired", alternative="two.sided")
+pwr.anova.test(k=3, n=15, f=NULL, sig.level = 0.468, power=0.9)
+
+#alpha distress vs alpha food
+tt1 <- t.test(act_indep_strat_indep_model$alpha_stress, act_indep_strat_indep_model$alpha_meal, paired = TRUE, alternative = "two.sided")
+#beta distress vs alpha food
+tt1_b <- t.test(act_indep_strat_indep_model$beta_stress, act_indep_strat_indep_model$beta_meal, paired = TRUE, alternative = "two.sided")
+
+#BF t test
+ttbf_a_1 <- ttestBF(act_indep_strat_indep_model$alpha_stress, act_indep_strat_indep_model$alpha_meal, paired = TRUE, alternative = "two.sided")
+chains1 = posterior(ttbf_a_1, iterations = 1000)
+plot(chains1[,1:2])
+
+#alpha distress vs alpha value based
+tt2 <- t.test(act_indep_strat_indep_model$alpha_stress, act_indep_strat_indep_model$alpha_room, paired = TRUE, alternative = "two.sided")
+#beta distress vs alpha value based
+tt2_b <- t.test(act_indep_strat_indep_model$beta_stress, act_indep_strat_indep_model$beta_room, paired = TRUE, alternative = "two.sided")
+
+#alpha food vs alpha value based
+tt3 <- t.test(act_indep_strat_indep_model$alpha_meal, act_indep_strat_indep_model$alpha_room, paired = TRUE, alternative = "two.sided")
+#beta food vs alpha value based
+tt3_b <- t.test(act_indep_strat_indep_model$beta_meal, act_indep_strat_indep_model$beta_room, paired = TRUE, alternative = "two.sided")
+
+library(pander)
+library(broom)
+library(purrr)
+pander(tt1)
+
+tab <- map_df(list(tt1, tt2, tt3), tidy)
+tab[c("estimate", "statistic", "p.value", "conf.low", "conf.high")]
+
+#power analysis
+n1 = length(act_indep_strat_indep_model$alpha_meal)
+n2 = length(act_indep_strat_indep_model$alpha_stress)
+var1 = var(act_indep_strat_indep_model$alpha_meal)
+var2 = var(act_indep_strat_indep_model$alpha_stress)
+sdpool = sqrt(((n1 - 1) * var1 + (n2 - 1) * var2)/(n1 + n2 -
+                                                     + 2))
+power <- tt1$estimate/sdpool
+
+var1_b = var(act_indep_strat_indep_model$beta_stress)
+var2_b = var(act_indep_strat_indep_model$beta_room)
+sdpool_b = sqrt(((n1 - 1) * var1_b + (n2 - 1) * var2_b)/(n1 + n2 -
+                                                     + 2))
+power_b <- tt2_b$estimate/sdpool_b
+ggpairs(act_indep_strat_indep_model)
 
 #comparison of alpha distress/food/value-based for high and low empathy levels - indep t test
 t.test(all_data$alpha_stress[all_data$empathy_level==1], all_data$alpha_stress[all_data$empathy_level==0], paired=FALSE, alternative = "two.sided")
@@ -834,26 +945,25 @@ t.test(all_data$alpha_room[all_data$empathy_level==1], all_data$alpha_room[all_d
 
 #simple linear regression,"YVAR ~ XVAR" where YVAR is the dependent, or predicted,XVAR is the independent, or predictor
 #check whether empathy or its components predict learning rate in distress condition
-lm1 <- lm(alpha_stress ~ TE, data = all_data)
+lm1 <- lm(alpha_stress ~ CE*CR, data = all_data)
 summary(lm1)
-lm2 <- lm(alpha_stress ~ CE, data = all_data)
+lmBf1 <- lmBF(alpha_stress ~ TE, data = all_data)
+chains1 = posterior(lmBf1, iterations = 1000)
+plot(chains1[,2])
+lm2 <- lm(alpha_stress ~ TE*ES, data = all_data)
 summary(lm2)
 lm3 <- lm(alpha_stress ~ AE, data = all_data)
 summary(lm3)
 
 glm_s <-
-  glm(alpha_stress ~ CE,
+  glm(alpha_stress ~ AE*ES,
       data = all_data,
       family = gaussian(link = "identity"))
 summary(glm_s)
 
 ggplot(all_data, aes(y = alpha_stress, x = CE)) +
   geom_point() +
-  stat_smooth(
-    method = "glm",
-    se = F,
-    method.args = list(family = gaussian())
-  ) +
+  stat_smooth(method = "glm", se = F, method.args = list(family = gaussian()) , color="red") +
   ylab('distress learning rate') +
   xlab('empathy level')
 
@@ -872,6 +982,7 @@ learning_rates_longer <-
     names_to = "learning_rate",
     values_to = "value"
   )
+
 learning_rates_mean <-
   learning_rates_longer %>% group_by(learning_rate) %>% summarise(mean = mean(value), sem =
                                                                     sd(value) / sqrt(12))
@@ -889,6 +1000,12 @@ res.aov <- aov(alpha_stress ~ CE*CR, data = all_data)
 # Summary of the analysis
 summary(res.aov)
 
+
+library(nlme)
+model = lme(value ~ CE + CR + CE*CR, all_data_l, random = ~1|subject_nr,method="REML")
+model.fixed <- gls(alpha_stress ~ CE + CR + CE*CR, data=all_data, method="REML")
+
+anova(model)
 ################### for each subject, calculate frequencies of choices and plot them
 for (subj_num_local in subjects) {
   subj_choices <-
@@ -1059,13 +1176,13 @@ no_l <- ggplot() +
     axis.text=element_text(size=12),
     axis.text.x = element_blank(),
     axis.ticks = element_blank(), 
-    axis.title=element_text(size=14),
+    axis.title=element_text(size=17),
     panel.grid.minor = element_blank(),
     panel.background = element_rect(fill = "white"),
     axis.line = element_line(size = 0.5, linetype = "solid", colour = "black"),
     plot.title = element_text(size = 20, face = "bold",hjust=0.5),
     legend.position = "bottom", legend.title=element_blank(), legend.text=element_text(size=12),
-    plot.subtitle = element_text(color = "black", face = "italic", hjust = 0.5))+
+    plot.subtitle = element_text(color = "black", face = "italic", hjust = 0.5, size=12))+
   scale_color_manual(values = c('Actor 1' = 'orange','Actor 2' = 'darkblue'))+
   labs(title = "No learning", subtitle="Stable strategy preference to both actors")
 
@@ -1086,13 +1203,13 @@ c_l <-ggplot()+
     axis.text=element_text(size=12),
     axis.text.x = element_blank(),
     axis.ticks = element_blank(), 
-    axis.title=element_text(size=14),
+    axis.title=element_text(size=17),
     panel.grid.minor = element_blank(),
     panel.background = element_rect(fill = "white"),
     axis.line = element_line(size = 0.5, linetype = "solid",colour = "black"),
     plot.title = element_text(size = 20, face = "bold",hjust=0.5),
     legend.position = "bottom", legend.title=element_blank(), legend.text=element_text(size=12),
-    plot.subtitle = element_text(color = "black", face = "italic",hjust = 0.5))+
+    plot.subtitle = element_text(color = "black", face = "italic",hjust = 0.5, size=12))+
   scale_color_manual(values = c('Actor 1' = 'orange','Actor 2' = 'darkblue')) +
   labs(title = "Context learning", subtitle = "Fluctuations based on feedback due to ignoring actor identity")
 
@@ -1113,13 +1230,13 @@ no_c_l <-ggplot()+
     axis.text=element_text(size=12),
     axis.text.x = element_blank(),
     axis.ticks = element_blank(), 
-    axis.title=element_text(size=14),
+    axis.title=element_text(size=17),
     panel.grid.minor = element_blank(),
     panel.background = element_rect(fill = "white"),
     axis.line = element_line(size = 0.5, linetype = "solid", colour = "black"),
     plot.title = element_text(size = 20, face = "bold",hjust=0.5),
     legend.position = "bottom", legend.title=element_blank(), legend.text=element_text(size=12),
-    plot.subtitle = element_text(color = "black", face = "italic", hjust = 0.5))+
+    plot.subtitle = element_text(color = "black", face = "italic", hjust = 0.5, size=12))+
   scale_color_manual(values = c('Actor 1' = 'orange','Actor 2' = 'darkblue'))+
   labs(title = "No context learning", subtitle = "Proper learning of each actor independently")
 #grid.arrange(no_l,no_c_l,c_l, nrow=1)
